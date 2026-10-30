@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { INITIAL_SOFIA_PODOLOGY_RECORD, INITIAL_CLIENTS } from '@/lib/mockData';
+import { INITIAL_SOFIA_PODOLOGY_RECORD, EMPTY_CLIENT } from '@/lib/mockData';
 import { dbService } from '@/lib/dbService';
 import { PodologyRecord, FootFinding, Client } from '@/types/database';
 import AnatomicalFootMap from '@/components/AnatomicalFootMap';
@@ -13,7 +13,7 @@ export default function PodologiaRecordPage() {
   const params = useParams();
   const clientId = params.id as string;
 
-  const [client, setClient] = useState<Client>(INITIAL_CLIENTS[0]);
+  const [client, setClient] = useState<Client>(EMPTY_CLIENT);
   const [record, setRecord] = useState<PodologyRecord>(INITIAL_SOFIA_PODOLOGY_RECORD);
   const [isSavedBannerVisible, setIsSavedBannerVisible] = useState(false);
   const [isSaving, setIsSaving] = useState(false);

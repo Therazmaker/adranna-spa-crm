@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { INITIAL_CAMILA_MASSAGE_RECORD, INITIAL_CLIENTS } from '@/lib/mockData';
+import { INITIAL_CAMILA_MASSAGE_RECORD, INITIAL_CLIENTS, EMPTY_CLIENT } from '@/lib/mockData';
 import { MassageRecord } from '@/types/database';
 import BodyMap from '@/components/BodyMap';
 
@@ -11,7 +11,7 @@ export default function MasajeRecordPage() {
   const params = useParams();
   const clientId = params.id as string;
 
-  const client = INITIAL_CLIENTS.find((c) => c.id === clientId) || INITIAL_CLIENTS[2];
+  const client = INITIAL_CLIENTS.find((c) => c.id === clientId) || EMPTY_CLIENT;
   const [record, setRecord] = useState<MassageRecord>(INITIAL_CAMILA_MASSAGE_RECORD);
   const [selectedZones, setSelectedZones] = useState<string[]>(record.tensionZones);
   const [pressure, setPressure] = useState(record.preferredPressure);

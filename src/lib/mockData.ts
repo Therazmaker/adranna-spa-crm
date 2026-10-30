@@ -7,6 +7,18 @@ export const INITIAL_CLIENTS: Client[] = [];
 
 export const INITIAL_APPOINTMENTS: Appointment[] = [];
 
+// Cliente vacío para estados iniciales mientras se carga desde Supabase.
+export const EMPTY_CLIENT: Client = {
+  id: '',
+  name: '',
+  phone: '',
+  email: '',
+  birthdate: '',
+  tags: [],
+  totalVisits: 0,
+  createdAt: '',
+};
+
 export const INITIAL_SOFIA_PODOLOGY_RECORD: PodologyRecord = {
   id: '',
   clientId: '',
@@ -25,15 +37,24 @@ export const INITIAL_SOFIA_PODOLOGY_RECORD: PodologyRecord = {
   isSterilizationValidated: false,
   photos: [],
   evolutionHistory: [],
-  informedConsent: {},
-  audit: {},
+  informedConsent: {
+    signed: false,
+    signerName: '',
+    signerIdDoc: '',
+  },
+  audit: {
+    lastEditedBy: '',
+    professionalLicense: '',
+    lastEditedAt: '',
+    cabin: '',
+  },
 };
 
 export const INITIAL_CAMILA_MASSAGE_RECORD: MassageRecord = {
   id: '',
   clientId: '',
   massageType: 'relajante',
-  preferredPressure: 'Medio',
+  preferredPressure: 'Media',
   tensionZones: [],
   contraindications: [],
   aromatherapyOil: '',
