@@ -102,32 +102,28 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Banner de Consentimiento Clínico Pendiente */}
-      <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-secondary-container/40 text-on-secondary-container shadow-xs border border-secondary/20 transition-all hover:bg-secondary-container/50">
-        <div className="flex-shrink-0 w-9 h-9 rounded-full bg-secondary-fixed flex items-center justify-center text-secondary shadow-xs">
-          <span className="material-symbols-outlined text-[20px]">draw</span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-1">
-            <p className="text-xs sm:text-sm font-bold text-secondary">
-              Consentimiento Digital Pendiente
-            </p>
-            <span className="px-2 py-0.5 rounded-full bg-secondary text-white text-[10px] font-bold">
-              2 firmas requeridas
-            </span>
+      {/* Banner de Consentimientos Pendientes — solo si hay citas con pendingConsent */}
+      {appointments.some((a) => a.hasPendingConsent) && (
+        <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-secondary-container/40 text-on-secondary-container shadow-xs border border-secondary/20 transition-all hover:bg-secondary-container/50">
+          <div className="flex-shrink-0 w-9 h-9 rounded-full bg-secondary-fixed flex items-center justify-center text-secondary shadow-xs">
+            <span className="material-symbols-outlined text-[20px]">draw</span>
           </div>
-          <p className="text-xs text-on-secondary-container/90 mt-0.5">
-            Sofía Montesdeoca tiene consentimiento informado pendiente de firma biométrica antes de iniciar quiropodia.
-          </p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-1">
+              <p className="text-xs sm:text-sm font-bold text-secondary">
+                Consentimiento Digital Pendiente
+              </p>
+              <span className="px-2 py-0.5 rounded-full bg-secondary text-white text-[10px] font-bold">
+                {appointments.filter((a) => a.hasPendingConsent).length} firma(s) requeridas
+              </span>
+            </div>
+            <p className="text-xs text-on-secondary-container/90 mt-0.5">
+              {appointments.filter((a) => a.hasPendingConsent).map((a) => a.clientName).join(', ')} — firma biométrica pendiente antes de iniciar sesión.
+            </p>
+          </div>
+          <span className="material-symbols-outlined text-[22px] text-secondary flex-shrink-0 mt-1">chevron_right</span>
         </div>
-        <Link
-          href="/pacientes/cli-001/podologia"
-          className="flex-shrink-0 text-secondary hover:text-primary transition-colors p-1"
-          aria-label="Abrir ficha para firma"
-        >
-          <span className="material-symbols-outlined text-[22px]">chevron_right</span>
-        </Link>
-      </div>
+      )}
 
       {/* Acciones Rápidas */}
       <section className="grid grid-cols-2 gap-space-sm">

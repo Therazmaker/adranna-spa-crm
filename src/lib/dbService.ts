@@ -8,9 +8,11 @@ import {
 import { Client, Appointment, PodologyRecord, MassageRecord } from '@/types/database';
 
 export const dbService = {
-  // CLIENTES
+  // ─── CLIENTES ────────────────────────────────────────────────────────────────
+
   async getClients(): Promise<Client[]> {
-    if (!isSupabaseConfigured()) return INITIAL_CLIENTS;
+    if (!isSupabaseConfigured()) return INITIAL_CLIENTS; // vacío en producción
+
     try {
       const { data, error } = await supabase
         .from('clients')
@@ -18,15 +20,11 @@ export const dbService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error al obtener clientes de Supabase:', error.message);
-        return INITIAL_CLIENTS;
+        console.error('Error al obtener clientes:', error.message);
+        return [];
       }
 
-      if (!data || data.length === 0) {
-        return INITIAL_CLIENTS;
-      }
-
-      return data.map((c) => ({
+      return (data ?? []).map((c) => ({
         id: c.id,
         name: c.name,
         phone: c.phone || '',
@@ -43,7 +41,7 @@ export const dbService = {
       }));
     } catch (err) {
       console.error('Excepción al cargar clientes:', err);
-      return INITIAL_CLIENTS;
+      return [];
     }
   },
 
@@ -55,9 +53,7 @@ export const dbService = {
       createdAt: new Date().toISOString(),
     };
 
-    if (!isSupabaseConfigured()) {
-      return fallbackClient;
-    }
+    if (!isSupabaseConfigured()) return fallbackClient;
 
     try {
       const { data, error } = await supabase
@@ -78,7 +74,7 @@ export const dbService = {
         .single();
 
       if (error) {
-        console.error('Error insertando cliente en Supabase:', error.message, error.details);
+        console.error('Error insertando cliente:', error.message, error.details);
         return fallbackClient;
       }
 
@@ -102,20 +98,33 @@ export const dbService = {
     }
   },
 
-  // CITAS
+  async deleteClient(clientId: string): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const { error } = await supabase.from('clients').delete().eq('id', clientId);
+      if (error) console.error('Error al eliminar cliente:', error.message);
+    } catch (err) {
+      console.error('Excepción en deleteClient:', err);
+    }
+  },
+
+  // ─── CITAS ───────────────────────────────────────────────────────────────────
+
   async getAppointments(): Promise<Appointment[]> {
-    if (!isSupabaseConfigured()) return INITIAL_APPOINTMENTS;
+    if (!isSupabaseConfigured()) return INITIAL_APPOINTMENTS; // vacío en producción
+
     try {
       const { data, error } = await supabase
         .from('appointments')
         .select('*')
         .order('appointment_time', { ascending: true });
 
-      if (error || !data || data.length === 0) {
-        return INITIAL_APPOINTMENTS;
+      if (error) {
+        console.error('Error al obtener citas:', error.message);
+        return [];
       }
 
-      return data.map((a) => ({
+      return (data ?? []).map((a) => ({
         id: a.id,
         clientId: a.client_id,
         clientName: a.client_name,
@@ -137,7 +146,7 @@ export const dbService = {
         notes: a.notes,
       }));
     } catch {
-      return INITIAL_APPOINTMENTS;
+      return [];
     }
   },
 
@@ -162,11 +171,22 @@ export const dbService = {
         has_pending_consent: apt.hasPendingConsent,
       });
     } catch (e) {
-      console.warn('Error al guardar cita en Supabase:', e);
+      console.warn('Error al guardar cita:', e);
     }
   },
 
-  // EXPEDIENTES PODOLÓGICOS
+  async deleteAppointment(appointmentId: string): Promise<void> {
+    if (!isSupabaseConfigured()) return;
+    try {
+      const { error } = await supabase.from('appointments').delete().eq('id', appointmentId);
+      if (error) console.error('Error al eliminar cita:', error.message);
+    } catch (err) {
+      console.error('Excepción en deleteAppointment:', err);
+    }
+  },
+
+  // ─── EXPEDIENTES PODOLÓGICOS ─────────────────────────────────────────────────
+
   async getPodologyRecord(clientId: string): Promise<PodologyRecord> {
     if (!isSupabaseConfigured()) return INITIAL_SOFIA_PODOLOGY_RECORD;
     try {
@@ -176,9 +196,7 @@ export const dbService = {
         .eq('client_id', clientId)
         .maybeSingle();
 
-      if (error || !data) {
-        return INITIAL_SOFIA_PODOLOGY_RECORD;
-      }
+      if (error || !data) return INITIAL_SOFIA_PODOLOGY_RECORD;
 
       return {
         id: data.id,
@@ -230,7 +248,37 @@ export const dbService = {
         updated_at: new Date().toISOString(),
       });
     } catch (e) {
-      console.warn('Error al guardar expediente en Supabase:', e);
+      console.warn('Error al guardar expediente:', e);
+    }
+  },
+
+  // ─── EXPEDIENTES DE MASAJE ───────────────────────────────────────────────────
+
+  async getMassageRecord(clientId: string): Promise<MassageRecord | null> {
+    if (!isSupabaseConfigured()) return INITIAL_CAMILA_MASSAGE_RECORD;
+    try {
+      const { data, error } = await supabase
+        .from('massage_records')
+        .select('*')
+        .eq('client_id', clientId)
+        .maybeSingle();
+
+      if (error || !data) return null;
+
+      return {
+        id: data.id,
+        clientId: data.client_id,
+        massageType: data.massage_type,
+        preferredPressure: data.preferred_pressure,
+        tensionZones: data.tension_zones || [],
+        contraindications: data.contraindications || [],
+        aromatherapyOil: data.aromatherapy_oil,
+        sessionNotes: data.session_notes,
+        durationMinutes: data.duration_minutes || 60,
+        lastSessionDate: data.last_session_date,
+      };
+    } catch {
+      return null;
     }
   },
 };
