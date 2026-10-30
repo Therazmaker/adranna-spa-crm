@@ -1,0 +1,129 @@
+export type UserRole = 'admin' | 'recepcion' | 'terapeuta';
+
+export interface Client {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  phone: string;
+  email: string;
+  birthdate: string;
+  tags: string[];
+  totalVisits: number;
+  lastVisit?: string;
+  nextAppointment?: string;
+  notes?: string;
+  hasMedicalAlert?: boolean;
+  medicalAlertDescription?: string;
+  createdAt: string;
+}
+
+export interface Appointment {
+  id: string;
+  clientId: string;
+  clientName: string;
+  clientPhone: string;
+  professionalName: string;
+  professionalRole: string;
+  discipline: 'podologia' | 'masaje';
+  cabinId: string;
+  cabinName: string;
+  serviceName: string;
+  durationMinutes: number;
+  price: number;
+  status: 'confirmado' | 'en_curso' | 'completado' | 'cancelado';
+  date: string; // YYYY-MM-DD
+  time: string; // HH:MM
+  hasMedicalAlert?: boolean;
+  medicalAlertText?: string;
+  hasPendingConsent?: boolean;
+  notes?: string;
+}
+
+export interface FootFinding {
+  id: string;
+  markerNumber: number;
+  foot: 'izquierdo' | 'derecho';
+  view: 'dorsal' | 'plantar';
+  condition: 'onicocriptosis' | 'hiperqueratosis' | 'micosis' | 'verruga';
+  title: string;
+  severity: 'Agudo' | 'Crónico' | 'Seguimiento';
+  description: string;
+  markerCoords: { x: number; y: number }; // percentage coords on foot canvas
+}
+
+export interface PhotoComparison {
+  id: string;
+  title: string;
+  sessionNumber: number;
+  date: string;
+  beforeUrl: string;
+  afterUrl: string;
+  beforeDescription: string;
+  afterDescription: string;
+}
+
+export interface ClinicalEvolutionEntry {
+  id: string;
+  date: string;
+  time: string;
+  practitionerName: string;
+  description: string;
+  indication: string;
+}
+
+export interface PodologyRecord {
+  id: string;
+  clientId: string;
+  expNumber: string;
+  diabetesMellitus: boolean;
+  diabetesType?: string;
+  hypertension: boolean;
+  peripheralCirculation: boolean;
+  latexAllergy: boolean;
+  iodineAllergy: boolean;
+  currentMedications: string[];
+  consultationReason: string;
+  findings: FootFinding[];
+  appliedTreatment: string;
+  autoclaveCycleNumber: string;
+  isSterilizationValidated: boolean;
+  photos: PhotoComparison[];
+  evolutionHistory: ClinicalEvolutionEntry[];
+  informedConsent: {
+    signed: boolean;
+    signerName: string;
+    signerIdDoc: string;
+    signatureSvg?: string;
+    signatureTimestamp?: string;
+    sha256Hash?: string;
+  };
+  audit: {
+    lastEditedBy: string;
+    professionalLicense: string;
+    lastEditedAt: string;
+    cabin: string;
+  };
+}
+
+export interface MassageRecord {
+  id: string;
+  clientId: string;
+  massageType: 'descontracturante' | 'relajante' | 'drenaje_linfatico' | 'tejido_profundo';
+  preferredPressure: 'Suave' | 'Media' | 'Firme' | 'Tejido Profundo';
+  tensionZones: string[]; // ['cervical', 'trapecio', 'lumbar', 'piernas', etc.]
+  contraindications: string[];
+  aromatherapyOil: string;
+  sessionNotes: string;
+  durationMinutes: number;
+  lastSessionDate: string;
+}
+
+export interface ServicePackage {
+  id: string;
+  name: string;
+  category: 'podologia' | 'masaje' | 'paquete';
+  durationMinutes: number;
+  price: number;
+  description: string;
+  sessionsIncluded?: number;
+}
