@@ -242,8 +242,8 @@ export default function ServiciosPage() {
 
       {/* Modal Crear / Editar Tratamiento */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-surface-container-lowest rounded-t-3xl sm:rounded-3xl w-full max-w-md p-5 shadow-2xl border border-surface-container-high space-y-4">
+        <div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-surface-container-lowest rounded-t-3xl sm:rounded-3xl w-full max-w-md p-5 pb-8 sm:pb-5 shadow-2xl border border-surface-container-high space-y-4 max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-surface-container-high">
               <div className="flex items-center gap-2">
                 <span className="w-8 h-8 rounded-full bg-primary-container text-white flex items-center justify-center">

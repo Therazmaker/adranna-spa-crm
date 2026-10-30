@@ -33,7 +33,7 @@ export default function AppointmentBottomSheet({
   const currentStatus = statusConfig[appointment.status] ?? statusConfig.confirmado;
 
   return (
-    <div className="fixed inset-x-0 bottom-16 z-50 max-w-7xl mx-auto px-gutter-mobile">
+    <div className="fixed inset-x-0 bottom-16 z-[80] max-w-7xl mx-auto px-gutter-mobile">
       {/* Backdrop tap to close */}
       <div className="fixed inset-0 bg-transparent z-[-1]" onClick={onClose} />
 
