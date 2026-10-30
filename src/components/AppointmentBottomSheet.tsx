@@ -28,7 +28,6 @@ export default function AppointmentBottomSheet({
     en_curso:    { label: 'En Curso',    color: 'bg-primary-container/20 text-primary-container' },
     completado:  { label: 'Completado',  color: 'bg-tertiary-container/30 text-tertiary' },
     cancelado:   { label: 'Cancelado',   color: 'bg-error-container/40 text-error' },
-    pendiente:   { label: 'Pendiente',   color: 'bg-surface-container-high text-on-surface-variant' },
   };
 
   const currentStatus = statusConfig[appointment.status] ?? statusConfig.confirmado;

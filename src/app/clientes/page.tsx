@@ -95,7 +95,7 @@ function ClientFormModal({
   onClose: () => void;
   isSaving: boolean;
 }) {
-  const [form, setForm] = useState(
+  const [form, setForm] = useState<typeof EMPTY_FORM>(
     initial
       ? {
           name: initial.name,
@@ -103,7 +103,7 @@ function ClientFormModal({
           email: initial.email,
           birthdate: initial.birthdate || '',
           condition: initial.tags.filter((t) => !['Nuevo Paciente'].includes(t)).join(', '),
-          isDiabetic: initial.hasMedicalAlert,
+          isDiabetic: initial.hasMedicalAlert ?? false,
           notes: initial.notes || '',
         }
       : { ...EMPTY_FORM }
