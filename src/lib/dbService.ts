@@ -5,7 +5,7 @@ import {
   INITIAL_SOFIA_PODOLOGY_RECORD,
   INITIAL_CAMILA_MASSAGE_RECORD,
 } from './mockData';
-import { Client, Appointment, PodologyRecord, MassageRecord } from '@/types/database';
+import { Client, Appointment, PodologyRecord, MassageRecord, Professional, ServicePackage } from '@/types/database';
 
 export const dbService = {
   // ─── CLIENTES ────────────────────────────────────────────────────────────────
@@ -115,19 +115,19 @@ export const dbService = {
     if (!isSupabaseConfigured()) return null;
     try {
       const payload: Record<string, unknown> = {};
-      if (updates.clientName !== undefined)      payload.client_name = updates.clientName;
-      if (updates.clientPhone !== undefined)     payload.client_phone = updates.clientPhone;
+      if (updates.clientName !== undefined)       payload.client_name = updates.clientName;
+      if (updates.clientPhone !== undefined)      payload.client_phone = updates.clientPhone;
       if (updates.professionalName !== undefined) payload.professional_name = updates.professionalName;
       if (updates.professionalRole !== undefined) payload.professional_role = updates.professionalRole;
-      if (updates.discipline !== undefined)      payload.discipline = updates.discipline;
-      if (updates.cabinName !== undefined)       payload.cabin_name = updates.cabinName;
-      if (updates.serviceName !== undefined)     payload.service_name = updates.serviceName;
-      if (updates.durationMinutes !== undefined) payload.duration_minutes = updates.durationMinutes;
-      if (updates.price !== undefined)           payload.price = updates.price;
-      if (updates.status !== undefined)          payload.status = updates.status;
-      if (updates.date !== undefined)            payload.appointment_date = updates.date;
-      if (updates.time !== undefined)            payload.appointment_time = updates.time;
-      if (updates.notes !== undefined)           payload.notes = updates.notes;
+      if (updates.discipline !== undefined)       payload.discipline = updates.discipline;
+      if (updates.cabinName !== undefined)        payload.cabin_name = updates.cabinName;
+      if (updates.serviceName !== undefined)      payload.service_name = updates.serviceName;
+      if (updates.durationMinutes !== undefined)  payload.duration_minutes = updates.durationMinutes;
+      if (updates.price !== undefined)            payload.price = updates.price;
+      if (updates.status !== undefined)           payload.status = updates.status;
+      if (updates.date !== undefined)             payload.appointment_date = updates.date;
+      if (updates.time !== undefined)             payload.appointment_time = updates.time;
+      if (updates.notes !== undefined)            payload.notes = updates.notes;
 
       const { data, error } = await supabase
         .from('appointments')
@@ -147,6 +147,237 @@ export const dbService = {
       if (error) { console.error('deleteAppointment:', error.message); return false; }
       return true;
     } catch (err) { console.error('deleteAppointment exception:', err); return false; }
+  },
+
+  // ─── PROFESIONALES / EQUIPO ──────────────────────────────────────────────────
+
+  async getProfessionals(): Promise<Professional[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('professionals')
+          .select('*')
+          .order('name', { ascending: true });
+        if (!error && data && data.length > 0) {
+          return data.map((p) => ({
+            id: p.id,
+            name: p.name,
+            role: p.role,
+            specialty: p.discipline || p.specialty || 'general',
+            phone: p.phone || '',
+            email: p.email || '',
+            active: p.active ?? true,
+            createdAt: p.created_at,
+          }));
+        }
+      } catch {
+        // Fallback a localStorage si la tabla aún no existe en Supabase
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('adranna_professionals');
+      if (cached) {
+        try { return JSON.parse(cached); } catch { /* ignore */ }
+      }
+    }
+    return [];
+  },
+
+  async createProfessional(prof: Omit<Professional, 'id'>): Promise<Professional> {
+    const fallbackId = `prof-${Date.now()}`;
+    const newProf: Professional = { id: fallbackId, ...prof, active: true };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('professionals')
+          .insert({
+            name: prof.name,
+            role: prof.role,
+            discipline: prof.specialty,
+            phone: prof.phone || null,
+            email: prof.email || null,
+            active: true,
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          newProf.id = data.id;
+        }
+      } catch {
+        // Fallback a almacenamiento local
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const current = await this.getProfessionals();
+      const updated = [newProf, ...current.filter((p) => p.id !== newProf.id)];
+      localStorage.setItem('adranna_professionals', JSON.stringify(updated));
+    }
+
+    return newProf;
+  },
+
+  async updateProfessional(id: string, updates: Partial<Professional>): Promise<Professional | null> {
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase
+          .from('professionals')
+          .update({
+            name: updates.name,
+            role: updates.role,
+            discipline: updates.specialty,
+            phone: updates.phone || null,
+            email: updates.email || null,
+            active: updates.active,
+          })
+          .eq('id', id);
+      } catch {
+        // fallback
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const current = await this.getProfessionals();
+      const updated = current.map((p) => p.id === id ? { ...p, ...updates } : p);
+      localStorage.setItem('adranna_professionals', JSON.stringify(updated));
+      return updated.find((p) => p.id === id) || null;
+    }
+    return null;
+  },
+
+  async deleteProfessional(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('professionals').delete().eq('id', id);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const current = await this.getProfessionals();
+      const updated = current.filter((p) => p.id !== id);
+      localStorage.setItem('adranna_professionals', JSON.stringify(updated));
+    }
+    return true;
+  },
+
+  // ─── SERVICIOS & TRATAMIENTOS ───────────────────────────────────────────────
+
+  async getServices(): Promise<ServicePackage[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('*')
+          .order('name', { ascending: true });
+        if (!error && data && data.length > 0) {
+          return data.map((s) => ({
+            id: s.id,
+            name: s.name,
+            category: s.category || 'podologia',
+            durationMinutes: s.duration_minutes || 45,
+            price: Number(s.price) || 0,
+            description: s.description || '',
+            sessionsIncluded: s.sessions_included || 1,
+            createdAt: s.created_at,
+          }));
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('adranna_services');
+      if (cached) {
+        try { return JSON.parse(cached); } catch { /* ignore */ }
+      }
+    }
+    return [];
+  },
+
+  async createService(srv: Omit<ServicePackage, 'id'>): Promise<ServicePackage> {
+    const fallbackId = `srv-${Date.now()}`;
+    const newSrv: ServicePackage = { id: fallbackId, ...srv };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .insert({
+            name: srv.name,
+            category: srv.category,
+            duration_minutes: srv.durationMinutes,
+            price: srv.price,
+            description: srv.description || null,
+            sessions_included: srv.sessionsIncluded || 1,
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          newSrv.id = data.id;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const current = await this.getServices();
+      const updated = [newSrv, ...current.filter((s) => s.id !== newSrv.id)];
+      localStorage.setItem('adranna_services', JSON.stringify(updated));
+    }
+
+    return newSrv;
+  },
+
+  async updateService(id: string, updates: Partial<ServicePackage>): Promise<ServicePackage | null> {
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase
+          .from('services')
+          .update({
+            name: updates.name,
+            category: updates.category,
+            duration_minutes: updates.durationMinutes,
+            price: updates.price,
+            description: updates.description,
+          })
+          .eq('id', id);
+      } catch {
+        // fallback
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const current = await this.getServices();
+      const updated = current.map((s) => s.id === id ? { ...s, ...updates } : s);
+      localStorage.setItem('adranna_services', JSON.stringify(updated));
+      return updated.find((s) => s.id === id) || null;
+    }
+    return null;
+  },
+
+  async deleteService(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('services').delete().eq('id', id);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const current = await this.getServices();
+      const updated = current.filter((s) => s.id !== id);
+      localStorage.setItem('adranna_services', JSON.stringify(updated));
+    }
+    return true;
   },
 
   // ─── EXPEDIENTES PODOLÓGICOS ─────────────────────────────────────────────────

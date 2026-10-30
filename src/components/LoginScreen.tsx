@@ -4,13 +4,12 @@ import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function LoginScreen() {
-  const { signIn, signUp, bypassLogin } = useAuth();
+  const { signIn, signUp } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'terapeuta' | 'recepcion'>('terapeuta');
   const [showPassword, setShowPassword] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -29,12 +28,12 @@ export default function LoginScreen() {
         setErrorMsg(res.error);
       }
     } else {
-      if (!fullName) {
+      if (!fullName.trim()) {
         setErrorMsg('Por favor ingresa tu nombre completo.');
         setIsLoading(false);
         return;
       }
-      const res = await signUp(email, password, fullName);
+      const res = await signUp(email, password, fullName.trim());
       if (res.error) {
         setErrorMsg(res.error);
       } else if (res.message) {
@@ -42,16 +41,6 @@ export default function LoginScreen() {
       }
     }
     setIsLoading(false);
-  };
-
-  const handleDemoLogin = (role: 'admin' | 'terapeuta' | 'recepcion') => {
-    if (role === 'admin') {
-      bypassLogin('admin@adranna.com', 'Dra. Elena Valdés', 'admin');
-    } else if (role === 'terapeuta') {
-      bypassLogin('terapeuta@adranna.com', 'Lic. Claudia Nájera', 'terapeuta');
-    } else {
-      bypassLogin('recepcion@adranna.com', 'Recepción Polanco', 'recepcion');
-    }
   };
 
   return (
@@ -71,11 +60,11 @@ export default function LoginScreen() {
               Adranna Spa
             </span>
             <span className="text-xs uppercase tracking-widest text-secondary font-bold font-sans">
-              Clínica Podológica & Terapias
+              Clínica Podológica & Bienestar
             </span>
           </div>
           <p className="text-xs text-on-surface-variant max-w-xs mx-auto pt-1">
-            Acceso seguro con permisos por rol y protección de expedientes de salud.
+            Ingreso al sistema clínico y gestión de pacientes.
           </p>
         </div>
 
@@ -107,7 +96,7 @@ export default function LoginScreen() {
                 : 'text-on-surface-variant hover:text-primary'
             }`}
           >
-            Crear Cuenta
+            Registrar Usuario
           </button>
         </div>
 
@@ -131,7 +120,7 @@ export default function LoginScreen() {
           {mode === 'signup' && (
             <div className="space-y-1">
               <label className="text-xs font-bold text-on-surface-variant block">
-                Nombre y Título Profesional
+                Nombre y Apellidos
               </label>
               <div className="relative">
                 <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-[18px]">
@@ -140,7 +129,7 @@ export default function LoginScreen() {
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Dra. Elena Valdés"
+                  placeholder="Tu nombre completo"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-container-low border border-surface-container-high text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
@@ -160,7 +149,7 @@ export default function LoginScreen() {
               <input
                 type="email"
                 required
-                placeholder="profesional@adranna.com"
+                placeholder="correo@ejemplo.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-surface-container-low border border-surface-container-high text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
@@ -204,49 +193,16 @@ export default function LoginScreen() {
             {isLoading ? (
               <>
                 <span className="material-symbols-outlined text-[18px] animate-spin">sync</span>
-                <span>Verificando credenciales...</span>
+                <span>Procesando...</span>
               </>
             ) : (
               <>
                 <span className="material-symbols-outlined text-[18px]">login</span>
-                <span>{mode === 'signin' ? 'Ingresar al CRM' : 'Registrar Cuenta'}</span>
+                <span>{mode === 'signin' ? 'Ingresar al CRM' : 'Crear Cuenta'}</span>
               </>
             )}
           </button>
         </form>
-
-        {/* Acceso Rápido de Demostración */}
-        <div className="pt-2 border-t border-surface-container-high space-y-2.5">
-          <span className="text-[11px] font-bold text-outline uppercase tracking-wider block text-center">
-            Acceso Rápido por Rol
-          </span>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('admin')}
-              className="p-2.5 rounded-xl bg-surface-container-low border border-surface-container-high hover:border-primary text-left transition-all"
-            >
-              <div className="flex items-center gap-1.5 text-primary text-xs font-bold">
-                <span className="material-symbols-outlined text-[16px]">stethoscope</span>
-                <span>Dra. Elena</span>
-              </div>
-              <span className="text-[10px] text-outline block">Podóloga Titular / Admin</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('terapeuta')}
-              className="p-2.5 rounded-xl bg-surface-container-low border border-surface-container-high hover:border-secondary text-left transition-all"
-            >
-              <div className="flex items-center gap-1.5 text-secondary text-xs font-bold">
-                <span className="material-symbols-outlined text-[16px]">spa</span>
-                <span>Lic. Claudia</span>
-              </div>
-              <span className="text-[10px] text-outline block">Masoterapia & Bienestar</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

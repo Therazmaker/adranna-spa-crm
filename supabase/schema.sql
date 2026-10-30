@@ -95,7 +95,19 @@ CREATE TABLE IF NOT EXISTS public.services (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. TABLA DE AUDITORÍA (CUMPLIMIENTO DE PROTECCIÓN DE DATOS DE SALUD)
+-- 6. TABLA DE PROFESIONALES / EQUIPO
+CREATE TABLE IF NOT EXISTS public.professionals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  discipline TEXT DEFAULT 'general',
+  phone TEXT,
+  email TEXT,
+  active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. TABLA DE AUDITORÍA (CUMPLIMIENTO DE PROTECCIÓN DE DATOS DE SALUD)
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID,
@@ -115,21 +127,24 @@ ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.podology_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.massage_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.professionals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de Acceso (Permiten lectura y escritura para usuarios del sistema)
-CREATE POLICY "Permitir lectura clients" ON public.clients FOR SELECT USING (true);
-CREATE POLICY "Permitir escritura clients" ON public.clients FOR ALL USING (true);
+DROP POLICY IF EXISTS "Acceso total clients" ON public.clients;
+CREATE POLICY "Acceso total clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Permitir lectura appointments" ON public.appointments FOR SELECT USING (true);
-CREATE POLICY "Permitir escritura appointments" ON public.appointments FOR ALL USING (true);
+DROP POLICY IF EXISTS "Acceso total appointments" ON public.appointments;
+CREATE POLICY "Acceso total appointments" ON public.appointments FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Permitir lectura podology" ON public.podology_records FOR SELECT USING (true);
-CREATE POLICY "Permitir escritura podology" ON public.podology_records FOR ALL USING (true);
+DROP POLICY IF EXISTS "Acceso total podology" ON public.podology_records;
+CREATE POLICY "Acceso total podology" ON public.podology_records FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Permitir lectura massage" ON public.massage_records FOR SELECT USING (true);
-CREATE POLICY "Permitir escritura massage" ON public.massage_records FOR ALL USING (true);
+DROP POLICY IF EXISTS "Acceso total massage" ON public.massage_records;
+CREATE POLICY "Acceso total massage" ON public.massage_records FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Permitir lectura services" ON public.services FOR SELECT USING (true);
-CREATE POLICY "Permitir lectura audit_logs" ON public.audit_logs FOR SELECT USING (true);
-CREATE POLICY "Permitir insercion audit_logs" ON public.audit_logs FOR INSERT WITH CHECK (true);
+DROP POLICY IF EXISTS "Acceso total services" ON public.services;
+CREATE POLICY "Acceso total services" ON public.services FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Acceso total professionals" ON public.professionals;
+CREATE POLICY "Acceso total professionals" ON public.professionals FOR ALL USING (true) WITH CHECK (true);

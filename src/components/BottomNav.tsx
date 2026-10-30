@@ -12,7 +12,7 @@ export default function BottomNav() {
     { label: 'Agenda', path: '/agenda', icon: 'calendar_today' },
     { label: 'Clientes', path: '/clientes', icon: 'group' },
     { label: 'Servicios', path: '/servicios', icon: 'medical_services' },
-    { label: 'Reportes', path: '/reportes', icon: 'insights' },
+    { label: 'Equipo', path: '/equipo', icon: 'badge' },
   ];
 
   return (

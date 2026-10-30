@@ -118,12 +118,24 @@ export interface MassageRecord {
   lastSessionDate: string;
 }
 
+export interface Professional {
+  id: string;
+  name: string;
+  role: string; // Ej: Podóloga Titular, Terapeuta Spa, Manicurista
+  specialty: 'podologia' | 'masaje' | 'manicura' | 'general';
+  phone?: string;
+  email?: string;
+  active: boolean;
+  createdAt?: string;
+}
+
 export interface ServicePackage {
   id: string;
   name: string;
-  category: 'podologia' | 'masaje' | 'paquete';
+  category: 'podologia' | 'masaje' | 'manicura' | 'paquete';
   durationMinutes: number;
   price: number;
   description: string;
   sessionsIncluded?: number;
+  createdAt?: string;
 }
