@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import Navbar from '@/components/Navbar';
-import BottomNav from '@/components/BottomNav';
+import { AuthProvider } from '@/context/AuthContext';
+import AuthGate from '@/components/AuthGate';
 
 export const metadata: Metadata = {
   title: 'Adranna Spa CRM Clínico',
@@ -39,11 +39,11 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-surface font-sans text-on-surface flex flex-col min-h-screen">
-        <Navbar />
-        <main className="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-surface max-w-7xl mx-auto px-gutter-mobile">
-          {children}
-        </main>
-        <BottomNav />
+        <AuthProvider>
+          <AuthGate>
+            {children}
+          </AuthGate>
+        </AuthProvider>
 
         {/* PWA Service Worker Registration */}
         <script

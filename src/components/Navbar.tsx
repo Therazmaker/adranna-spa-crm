@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/context/AuthContext';
 
 interface NavbarProps {
   title?: string;
@@ -9,6 +10,23 @@ interface NavbarProps {
 }
 
 export default function Navbar({ title, showBack = false }: NavbarProps) {
+  const { user, role, signOut } = useAuth();
+
+  const displayName = user?.user_metadata?.full_name || user?.email || 'Usuario';
+  const initials = displayName
+    .split(' ')
+    .filter(Boolean)
+    .map((p: string) => p[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+  const roleLabel = {
+    admin: 'Admin / Titular',
+    terapeuta: 'Terapeuta',
+    recepcion: 'Recepción',
+  }[role] ?? 'Clínica';
+
   return (
     <header className="fixed top-0 w-full z-50 pt-safe bg-surface/90 backdrop-blur-xl border-b border-surface-container-high/60 shadow-xs">
       <div className="h-16 px-gutter-mobile flex items-center justify-between max-w-7xl mx-auto w-full">
@@ -34,7 +52,7 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
 
           <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary-container/10 text-primary border border-primary-container/15">
             <span className="w-1.5 h-1.5 rounded-full bg-tertiary-container animate-pulse"></span>
-            <span className="text-xs font-medium">Recepción / Clínica</span>
+            <span className="text-xs font-medium">{roleLabel}</span>
           </div>
         </div>
 
@@ -58,12 +76,24 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
             <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-secondary ring-2 ring-surface"></span>
           </button>
 
-          <div className="flex items-center pl-1">
-            <img
-              alt="Dra. Elena Valdés"
-              className="w-9 h-9 rounded-full object-cover ring-2 ring-secondary/30 shadow-xs"
-              src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=120"
-            />
+          {/* Avatar con monograma e identidad */}
+          <div className="relative group flex items-center pl-1">
+            <button
+              title={`${displayName} — Cerrar Sesión`}
+              onClick={signOut}
+              className="flex items-center gap-2 rounded-full hover:bg-surface-container-high/60 px-1.5 py-1 transition-colors"
+              type="button"
+              aria-label="Cerrar Sesión"
+            >
+              <div className="w-9 h-9 rounded-full bg-primary-container/20 border-2 border-primary/20 text-primary font-bold text-sm flex items-center justify-center shadow-xs select-none">
+                {initials}
+              </div>
+              {/* Nombre visible en pantallas medianas */}
+              <span className="hidden md:block text-xs font-semibold text-on-surface-variant max-w-[100px] truncate">
+                {displayName.split(' ')[0]}
+              </span>
+              <span className="hidden md:block material-symbols-outlined text-[16px] text-outline">logout</span>
+            </button>
           </div>
         </div>
       </div>

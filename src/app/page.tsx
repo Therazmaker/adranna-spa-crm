@@ -1,18 +1,37 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { INITIAL_APPOINTMENTS, INITIAL_CLIENTS } from '@/lib/mockData';
-import { Appointment } from '@/types/database';
+import { dbService } from '@/lib/dbService';
+import { Appointment, Client } from '@/types/database';
 import AppointmentBottomSheet from '@/components/AppointmentBottomSheet';
 import NewAppointmentModal from '@/components/NewAppointmentModal';
+import { useAuth } from '@/context/AuthContext';
 
 export default function DashboardPage() {
-  const [appointments, setAppointments] = useState<Appointment[]>(INITIAL_APPOINTMENTS);
-  const [clients, setClients] = useState(INITIAL_CLIENTS);
+  const { user } = useAuth();
+  const displayName = user?.user_metadata?.full_name || user?.email || 'Profesional';
+
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [filterDiscipline, setFilterDiscipline] = useState<'all' | 'podologia' | 'masaje'>('all');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([dbService.getAppointments(), dbService.getClients()]).then(
+      ([apts, cls]) => {
+        if (mounted) {
+          setAppointments(apts);
+          setClients(cls);
+          setIsLoading(false);
+        }
+      }
+    );
+    return () => { mounted = false; };
+  }, []);
 
   const filteredAppointments = appointments.filter((apt) => {
     if (filterDiscipline === 'all') return true;
@@ -33,6 +52,20 @@ export default function DashboardPage() {
     setSelectedAppointment({ ...selectedAppointment, status: newStatus });
   };
 
+  const today = new Date().toLocaleDateString('es-MX', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  const todayCapitalized = today.charAt(0).toUpperCase() + today.slice(1);
+
+  const todayApts = appointments.filter((a) => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return a.date === todayStr || !a.date; // incluye mock sin fecha
+  });
+  const podoCount = todayApts.filter((a) => a.discipline === 'podologia').length;
+  const masajeCount = todayApts.filter((a) => a.discipline === 'masaje').length;
+
   return (
     <div className="flex flex-col w-full gap-space-md pb-8">
       {/* Saludo Personalizado & Contexto de Clínica */}
@@ -50,19 +83,21 @@ export default function DashboardPage() {
             <span className="material-symbols-outlined text-[16px] text-tertiary">
               calendar_month
             </span>
-            <span>Jueves, 24 de Octubre</span>
+            <span>{todayCapitalized}</span>
           </div>
         </div>
 
         <div className="mt-1 flex flex-col">
           <span className="text-xs text-secondary uppercase tracking-widest font-bold font-sans">
-            Panel Clínico & Bienestar
+            Panel Clínico &amp; Bienestar
           </span>
           <h1 className="font-serif text-2xl sm:text-3xl text-primary font-bold tracking-tight">
-            Buenos días, Dra. Elena Valdés
+            {isLoading ? 'Cargando...' : `Bienvenida, ${displayName}`}
           </h1>
           <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5">
-            La jornada clínica avanza al 42% de capacidad con cabinas esterilizadas y listas.
+            {isLoading
+              ? 'Conectando con Supabase...'
+              : `${appointments.length} citas programadas · ${clients.length} pacientes registrados`}
           </p>
         </div>
       </section>
@@ -82,7 +117,7 @@ export default function DashboardPage() {
             </span>
           </div>
           <p className="text-xs text-on-secondary-container/90 mt-0.5">
-            Sofía Montesdeoca tiene consentimiento informado pendiente de firma biométrica en pantalla antes de iniciar procedimiento de quiropodia.
+            Sofía Montesdeoca tiene consentimiento informado pendiente de firma biométrica antes de iniciar quiropodia.
           </p>
         </div>
         <Link
@@ -124,35 +159,42 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="my-2">
-            <span className="font-serif text-2xl font-bold text-primary">14</span>
+            {isLoading ? (
+              <span className="font-serif text-2xl font-bold text-primary animate-pulse">—</span>
+            ) : (
+              <span className="font-serif text-2xl font-bold text-primary">{todayApts.length}</span>
+            )}
             <span className="text-xs text-on-surface-variant ml-1 font-medium">sesiones</span>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] font-bold">
             <span className="px-1.5 py-0.5 rounded bg-primary-container/10 text-primary-container">
-              8 Podo
+              {podoCount} Podo
             </span>
             <span className="px-1.5 py-0.5 rounded bg-secondary-container/50 text-secondary">
-              6 Masaje
+              {masajeCount} Masaje
             </span>
           </div>
         </div>
 
-        {/* Ingresos del Día */}
+        {/* Total Pacientes */}
         <div className="p-3.5 rounded-2xl bg-surface-container-lowest shadow-xs border border-surface-container-high/60 flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-on-surface-variant font-medium">Ingresos del Día</span>
+            <span className="text-xs text-on-surface-variant font-medium">Pacientes</span>
             <div className="w-7 h-7 rounded-full bg-tertiary-container/15 flex items-center justify-center text-tertiary">
-              <span className="material-symbols-outlined text-[16px]">payments</span>
+              <span className="material-symbols-outlined text-[16px]">group</span>
             </div>
           </div>
           <div className="my-2">
-            <span className="font-serif text-2xl font-bold text-primary">S/ 2,450</span>
-            <span className="text-[11px] text-outline block font-medium">PEN Cobrados</span>
+            {isLoading ? (
+              <span className="font-serif text-2xl font-bold text-primary animate-pulse">—</span>
+            ) : (
+              <span className="font-serif text-2xl font-bold text-primary">{clients.length}</span>
+            )}
+            <span className="text-[11px] text-outline block font-medium">registrados</span>
           </div>
-          <div className="flex items-center gap-1 text-tertiary text-xs font-bold">
-            <span className="material-symbols-outlined text-[15px]">trending_up</span>
-            <span>+12% vs ayer</span>
-          </div>
+          <Link href="/clientes" className="text-xs text-primary font-bold hover:underline">
+            Ver directorio →
+          </Link>
         </div>
 
         {/* Nuevos Pacientes */}
@@ -164,8 +206,15 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="my-2">
-            <span className="font-serif text-2xl font-bold text-secondary">4</span>
-            <span className="text-xs text-on-surface-variant ml-1 font-medium">pacientes</span>
+            <span className="font-serif text-2xl font-bold text-secondary">
+              {isLoading ? '—' : clients.filter((c) => {
+                if (!c.createdAt) return false;
+                const created = new Date(c.createdAt);
+                const now = new Date();
+                return (now.getTime() - created.getTime()) < 7 * 24 * 60 * 60 * 1000;
+              }).length}
+            </span>
+            <span className="text-xs text-on-surface-variant ml-1 font-medium">esta semana</span>
           </div>
           <p className="text-[11px] text-on-surface-variant">Valoración inicial</p>
         </div>
@@ -195,7 +244,7 @@ export default function DashboardPage() {
             <span className="material-symbols-outlined text-[20px] text-tertiary">
               clean_hands
             </span>
-            <span className="text-sm font-bold text-primary">Esterilización & Cabinas</span>
+            <span className="text-sm font-bold text-primary">Esterilización &amp; Cabinas</span>
           </div>
           <span className="px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed text-xs font-bold">
             Autoclave Ciclo #442 OK
@@ -232,7 +281,9 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between px-1">
           <div>
             <h2 className="font-serif text-xl text-primary font-bold">Cronograma de Hoy</h2>
-            <span className="text-xs text-on-surface-variant">Próximas sesiones programadas</span>
+            <span className="text-xs text-on-surface-variant">
+              {isLoading ? 'Cargando citas...' : `${filteredAppointments.length} sesiones programadas`}
+            </span>
           </div>
           <div className="flex items-center gap-1 bg-surface-container-high p-1 rounded-xl text-xs font-semibold">
             <button
@@ -269,97 +320,115 @@ export default function DashboardPage() {
         </div>
 
         {/* Timeline list */}
-        <div className="flex flex-col gap-3">
-          {filteredAppointments.map((apt) => {
-            const isPodo = apt.discipline === 'podologia';
-            return (
-              <article
-                key={apt.id}
-                onClick={() => setSelectedAppointment(apt)}
-                className="relative flex overflow-hidden rounded-2xl bg-surface-container-lowest shadow-xs border border-surface-container-high/60 cursor-pointer transition-all hover:shadow-md hover:border-primary/30"
-              >
-                {/* Lateral discipline color bar */}
-                <div
-                  className={`w-2 flex-shrink-0 ${
-                    isPodo ? 'bg-primary-container' : 'bg-secondary'
-                  }`}
-                />
-                <div className="flex-1 p-3.5 flex flex-col gap-2 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span
-                          className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                            isPodo
-                              ? 'bg-primary-container/10 text-primary-container'
-                              : 'bg-secondary-container/40 text-secondary'
-                          }`}
-                        >
+        {isLoading ? (
+          <div className="py-8 flex flex-col items-center gap-2 text-on-surface-variant">
+            <span className="material-symbols-outlined text-2xl animate-spin text-primary">sync</span>
+            <span className="text-xs font-medium">Cargando agenda desde Supabase...</span>
+          </div>
+        ) : filteredAppointments.length === 0 ? (
+          <div className="py-10 flex flex-col items-center gap-3 text-on-surface-variant">
+            <span className="material-symbols-outlined text-4xl text-outline">event_busy</span>
+            <span className="text-sm font-medium text-center">Sin citas programadas para hoy</span>
+            <button
+              onClick={() => setIsNewAppointmentOpen(true)}
+              className="mt-1 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-container transition-all"
+            >
+              + Agregar Primera Cita
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {filteredAppointments.map((apt) => {
+              const isPodo = apt.discipline === 'podologia';
+              return (
+                <article
+                  key={apt.id}
+                  onClick={() => setSelectedAppointment(apt)}
+                  className="relative flex overflow-hidden rounded-2xl bg-surface-container-lowest shadow-xs border border-surface-container-high/60 cursor-pointer transition-all hover:shadow-md hover:border-primary/30"
+                >
+                  {/* Lateral discipline color bar */}
+                  <div
+                    className={`w-2 flex-shrink-0 ${
+                      isPodo ? 'bg-primary-container' : 'bg-secondary'
+                    }`}
+                  />
+                  <div className="flex-1 p-3.5 flex flex-col gap-2 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              isPodo ? 'bg-primary-container' : 'bg-secondary'
+                            className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                              isPodo
+                                ? 'bg-primary-container/10 text-primary-container'
+                                : 'bg-secondary-container/40 text-secondary'
                             }`}
-                          />
-                          {isPodo ? 'Podología Clínica' : 'Terapia Corporal'}
-                        </span>
-
-                        {apt.status === 'en_curso' && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-tertiary-container/15 text-tertiary text-[10px] font-bold flex items-center gap-0.5">
-                            <span className="material-symbols-outlined text-[12px] animate-spin">
-                              sync
-                            </span>{' '}
-                            En curso
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                isPodo ? 'bg-primary-container' : 'bg-secondary'
+                              }`}
+                            />
+                            {isPodo ? 'Podología Clínica' : 'Terapia Corporal'}
                           </span>
-                        )}
 
-                        {apt.hasMedicalAlert && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-error-container text-error text-[10px] font-bold flex items-center gap-0.5">
-                            <span className="material-symbols-outlined text-[12px]">warning</span>
-                            Alerta Médica
-                          </span>
-                        )}
+                          {apt.status === 'en_curso' && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-tertiary-container/15 text-tertiary text-[10px] font-bold flex items-center gap-0.5">
+                              <span className="material-symbols-outlined text-[12px] animate-spin">
+                                sync
+                              </span>{' '}
+                              En curso
+                            </span>
+                          )}
+
+                          {apt.hasMedicalAlert && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-error-container text-error text-[10px] font-bold flex items-center gap-0.5">
+                              <span className="material-symbols-outlined text-[12px]">warning</span>
+                              Alerta Médica
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="font-serif text-base text-on-surface font-bold mt-1 truncate">
+                          {apt.clientName}
+                        </h3>
+                        <p className="text-xs text-on-surface-variant truncate">
+                          {apt.serviceName}
+                        </p>
                       </div>
 
-                      <h3 className="font-serif text-base text-on-surface font-bold mt-1 truncate">
-                        {apt.clientName}
-                      </h3>
-                      <p className="text-xs text-on-surface-variant truncate">
-                        {apt.serviceName}
-                      </p>
+                      <div className="text-right flex-shrink-0">
+                        <span
+                          className={`font-serif text-lg font-bold block ${
+                            isPodo ? 'text-primary' : 'text-secondary'
+                          }`}
+                        >
+                          {apt.time}
+                        </span>
+                        <span className="text-[11px] text-outline font-medium">
+                          {apt.durationMinutes} min
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="text-right flex-shrink-0">
-                      <span
-                        className={`font-serif text-lg font-bold block ${
-                          isPodo ? 'text-primary' : 'text-secondary'
-                        }`}
-                      >
-                        {apt.time}
-                      </span>
-                      <span className="text-[11px] text-outline font-medium">
-                        {apt.durationMinutes} min
+                    <div className="flex items-center justify-between pt-1 border-t border-surface-container-high/40 text-xs text-on-surface-variant">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="material-symbols-outlined text-[15px] text-primary">
+                          stethoscope
+                        </span>
+                        <span className="truncate">
+                          {apt.professionalName} • {apt.cabinName}
+                        </span>
+                      </div>
+                      <span className="text-primary font-bold hover:underline flex-shrink-0">
+                        Ver Ficha &rarr;
                       </span>
                     </div>
                   </div>
-
-                  <div className="flex items-center justify-between pt-1 border-t border-surface-container-high/40 text-xs text-on-surface-variant">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="material-symbols-outlined text-[15px] text-primary">
-                        stethoscope
-                      </span>
-                      <span className="truncate">
-                        {apt.professionalName} • {apt.cabinName}
-                      </span>
-                    </div>
-                    <span className="text-primary font-bold hover:underline flex-shrink-0">
-                      Ver Ficha &rarr;
-                    </span>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* Bottom Sheet Appointment Details */}
