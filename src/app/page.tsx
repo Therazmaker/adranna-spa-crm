@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { dbService } from '@/lib/dbService';
 import { Appointment, Client } from '@/types/database';
@@ -16,18 +16,16 @@ export default function DashboardPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
-  const [filterDiscipline, setFilterDiscipline] = useState<'all' | 'podologia' | 'masaje'>('all');
+  const [editingAppointment, setEditingAppointment]   = useState<Appointment | null>(null);
+  const [filterDiscipline, setFilterDiscipline]       = useState<'all' | 'podologia' | 'masaje'>('all');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+  const [deletingAptId, setDeletingAptId]             = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     Promise.all([dbService.getAppointments(), dbService.getClients()]).then(
       ([apts, cls]) => {
-        if (mounted) {
-          setAppointments(apts);
-          setClients(cls);
-          setIsLoading(false);
-        }
+        if (mounted) { setAppointments(apts); setClients(cls); setIsLoading(false); }
       }
     );
     return () => { mounted = false; };
@@ -39,17 +37,37 @@ export default function DashboardPage() {
   });
 
   const handleAddAppointment = (newApt: Appointment) => {
-    setAppointments([newApt, ...appointments]);
+    setAppointments((prev) => [newApt, ...prev]);
+  };
+
+  const handleUpdateAppointment = (updated: Appointment) => {
+    setAppointments((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+    setSelectedAppointment(null);
+    setEditingAppointment(null);
   };
 
   const handleStatusChange = (newStatus: Appointment['status']) => {
     if (!selectedAppointment) return;
-    setAppointments(
-      appointments.map((a) =>
-        a.id === selectedAppointment.id ? { ...a, status: newStatus } : a
-      )
-    );
-    setSelectedAppointment({ ...selectedAppointment, status: newStatus });
+    const updated = { ...selectedAppointment, status: newStatus };
+    dbService.updateAppointment(selectedAppointment.id, { status: newStatus });
+    setAppointments((prev) => prev.map((a) => a.id === updated.id ? updated : a));
+    setSelectedAppointment(updated);
+  };
+
+  const handleEditAppointment = (apt: Appointment) => {
+    setSelectedAppointment(null);
+    setEditingAppointment(apt);
+    setIsNewAppointmentOpen(true);
+  };
+
+  const handleDeleteAppointment = async (apt: Appointment) => {
+    if (deletingAptId === apt.id) return;
+    if (!confirm(`¿Eliminar la cita de ${apt.clientName}?`)) return;
+    setDeletingAptId(apt.id);
+    await dbService.deleteAppointment(apt.id);
+    setAppointments((prev) => prev.filter((a) => a.id !== apt.id));
+    setSelectedAppointment(null);
+    setDeletingAptId(null);
   };
 
   const today = new Date().toLocaleDateString('es-MX', {
@@ -432,14 +450,18 @@ export default function DashboardPage() {
         appointment={selectedAppointment}
         onClose={() => setSelectedAppointment(null)}
         onStatusChange={handleStatusChange}
+        onEdit={handleEditAppointment}
+        onDelete={handleDeleteAppointment}
       />
 
-      {/* Modal Nueva Cita */}
+      {/* Modal Nueva / Editar Cita */}
       <NewAppointmentModal
         isOpen={isNewAppointmentOpen}
-        onClose={() => setIsNewAppointmentOpen(false)}
+        onClose={() => { setIsNewAppointmentOpen(false); setEditingAppointment(null); }}
         clients={clients}
         onAddAppointment={handleAddAppointment}
+        onUpdateAppointment={handleUpdateAppointment}
+        editingAppointment={editingAppointment}
       />
     </div>
   );
