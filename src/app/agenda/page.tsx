@@ -1,18 +1,24 @@
 'use client';
 
-import React, { useState } from 'react';
-import { INITIAL_APPOINTMENTS, INITIAL_CLIENTS } from '@/lib/mockData';
-import { Appointment } from '@/types/database';
+import React, { useState, useEffect } from 'react';
+import { dbService } from '@/lib/dbService';
+import { Appointment, Client } from '@/types/database';
 import AppointmentBottomSheet from '@/components/AppointmentBottomSheet';
 import NewAppointmentModal from '@/components/NewAppointmentModal';
 
 export default function AgendaPage() {
-  const [appointments, setAppointments] = useState<Appointment[]>(INITIAL_APPOINTMENTS);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [selectedDay, setSelectedDay] = useState(24);
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
   const [filterProfessional, setFilterProfessional] = useState<string>('all');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+
+  useEffect(() => {
+    dbService.getAppointments().then(setAppointments);
+    dbService.getClients().then(setClients);
+  }, []);
 
   const days = [
     { dayNumber: 21, dayLabel: 'LUN', hasPodology: true },
@@ -28,6 +34,11 @@ export default function AgendaPage() {
     return apt.professionalName.includes(filterProfessional);
   });
 
+  const handleAddAppointment = async (newApt: Appointment) => {
+    await dbService.createAppointment(newApt);
+    setAppointments((prev) => [newApt, ...prev]);
+  };
+
   return (
     <div className="flex flex-col w-full pb-8 space-y-4">
       {/* Header Agenda */}
@@ -42,7 +53,7 @@ export default function AgendaPage() {
             </span>
           </div>
           <p className="text-xs text-on-surface-variant mt-0.5">
-            {appointments.length} citas programadas para hoy • 2 cabinas activas
+            {appointments.length} citas registradas • 3 cabinas activas
           </p>
         </div>
 
@@ -267,25 +278,6 @@ export default function AgendaPage() {
             </div>
           );
         })}
-
-        {/* Bloque de Esterilización programado */}
-        <div className="flex gap-3 items-start opacity-75">
-          <div className="w-14 flex-shrink-0 text-right pt-2">
-            <span className="text-sm font-bold text-outline font-serif">02:15</span>
-            <span className="block text-[10px] text-outline font-semibold">PM</span>
-          </div>
-          <div className="flex-1 bg-surface-container-low rounded-2xl p-3.5 border border-dashed border-outline-variant flex items-center justify-between">
-            <div className="flex items-center gap-2 text-on-surface-variant">
-              <span className="material-symbols-outlined text-[20px] text-tertiary">
-                sanitizer
-              </span>
-              <span className="text-xs font-bold">
-                Esterilización y Desinfección de Cabina 2 (Autoclave)
-              </span>
-            </div>
-            <span className="text-[11px] text-outline font-semibold">30 min</span>
-          </div>
-        </div>
       </div>
 
       {/* Bottom Sheet Appointment Detail */}
@@ -298,8 +290,8 @@ export default function AgendaPage() {
       <NewAppointmentModal
         isOpen={isNewAppointmentOpen}
         onClose={() => setIsNewAppointmentOpen(false)}
-        clients={INITIAL_CLIENTS}
-        onAddAppointment={(newApt) => setAppointments([newApt, ...appointments])}
+        clients={clients}
+        onAddAppointment={handleAddAppointment}
       />
     </div>
   );

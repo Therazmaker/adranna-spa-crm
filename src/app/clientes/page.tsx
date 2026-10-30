@@ -1,15 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { INITIAL_CLIENTS } from '@/lib/mockData';
+import { dbService } from '@/lib/dbService';
 import { Client } from '@/types/database';
 
 export default function ClientesPage() {
-  const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string>('all');
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // New Client Form States
   const [newName, setNewName] = useState('');
@@ -19,6 +21,20 @@ export default function ClientesPage() {
   const [newIsDiabetic, setNewIsDiabetic] = useState(false);
 
   const tagsList = ['all', 'Pie Diabético', 'Podología', 'Masaje', 'VIP Gold'];
+
+  // Cargar clientes desde Supabase o mock al iniciar
+  useEffect(() => {
+    let mounted = true;
+    dbService.getClients().then((data) => {
+      if (mounted) {
+        setClients(data);
+        setIsLoading(false);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const filteredClients = clients.filter((c) => {
     const matchesSearch =
@@ -30,33 +46,53 @@ export default function ClientesPage() {
     return matchesSearch && matchesTag;
   });
 
-  const handleCreateClient = (e: React.FormEvent) => {
+  const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newName) return;
+    if (!newName.trim() || isSubmitting) return;
 
-    const newClient: Client = {
-      id: `cli-${Date.now()}`,
-      name: newName,
-      phone: newPhone || '+52 55 0000 0000',
-      email: newEmail || 'cliente@ejemplo.com',
-      birthdate: '1990-01-01',
-      tags: [
-        newIsDiabetic ? 'Pie Diabético' : 'Cliente Nuevo',
-        newCondition || 'General',
-      ],
-      totalVisits: 1,
-      hasMedicalAlert: newIsDiabetic,
-      medicalAlertDescription: newIsDiabetic
-        ? 'Paciente con condición de diabetes registrada.'
-        : undefined,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
+    setIsSubmitting(true);
 
-    setClients([newClient, ...clients]);
-    setIsNewClientModalOpen(false);
-    setNewName('');
-    setNewPhone('');
-    setNewEmail('');
+    const tags: string[] = [];
+    if (newIsDiabetic) tags.push('Pie Diabético');
+    if (newCondition) tags.push(newCondition.trim());
+    if (tags.length === 0) tags.push('Nuevo Paciente');
+
+    try {
+      const createdClient = await dbService.createClient({
+        name: newName.trim(),
+        phone: newPhone.trim() || '+52 55 0000 0000',
+        email: newEmail.trim() || '',
+        birthdate: '',
+        tags,
+        totalVisits: 1,
+        hasMedicalAlert: newIsDiabetic,
+        medicalAlertDescription: newIsDiabetic
+          ? 'Paciente con condición de diabetes registrada (protocolo podológico estricto).'
+          : undefined,
+      });
+
+      setClients((prev) => [createdClient, ...prev]);
+      setIsNewClientModalOpen(false);
+      setNewName('');
+      setNewPhone('');
+      setNewEmail('');
+      setNewCondition('');
+      setNewIsDiabetic(false);
+    } catch (err) {
+      console.error('Error al registrar cliente:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
   };
 
   return (
@@ -68,7 +104,9 @@ export default function ClientesPage() {
             Directorio de Pacientes
           </h1>
           <p className="text-xs text-on-surface-variant mt-0.5">
-            {clients.length} fichas clínicas activas registradas
+            {isLoading
+              ? 'Conectando con base de datos...'
+              : `${clients.length} fichas clínicas activas registradas`}
           </p>
         </div>
 
@@ -121,91 +159,102 @@ export default function ClientesPage() {
       </div>
 
       {/* Lista de Fichas de Clientes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-        {filteredClients.map((client) => (
-          <div
-            key={client.id}
-            className="bg-surface-container-lowest rounded-2xl p-4 shadow-xs border border-surface-container-high/60 flex flex-col justify-between gap-3 hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src={
-                    client.avatarUrl ||
-                    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120'
-                  }
-                  alt={client.name}
-                  className="w-12 h-12 rounded-full object-cover ring-2 ring-surface-container-high flex-shrink-0"
-                />
-                <div className="min-w-0">
-                  <h3 className="font-serif text-base font-bold text-on-surface truncate">
-                    {client.name}
-                  </h3>
-                  <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
-                    <span className="material-symbols-outlined text-[14px] text-secondary">
-                      phone
-                    </span>
-                    <span>{client.phone}</span>
-                  </p>
+      {isLoading ? (
+        <div className="py-12 flex flex-col items-center justify-center text-on-surface-variant gap-2">
+          <span className="material-symbols-outlined text-3xl animate-spin text-primary">sync</span>
+          <span className="text-xs font-medium">Cargando pacientes desde Supabase...</span>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          {filteredClients.map((client) => (
+            <div
+              key={client.id}
+              className="bg-surface-container-lowest rounded-2xl p-4 shadow-xs border border-surface-container-high/60 flex flex-col justify-between gap-3 hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  {client.avatarUrl ? (
+                    <img
+                      src={client.avatarUrl}
+                      alt={client.name}
+                      className="w-12 h-12 rounded-full object-cover ring-2 ring-surface-container-high flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-primary-container/10 border border-primary-container/20 text-primary font-bold text-sm flex items-center justify-center flex-shrink-0 shadow-xs">
+                      {getInitials(client.name)}
+                    </div>
+                  )}
+
+                  <div className="min-w-0">
+                    <h3 className="font-serif text-base font-bold text-on-surface truncate">
+                      {client.name}
+                    </h3>
+                    <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
+                      <span className="material-symbols-outlined text-[14px] text-secondary">
+                        phone
+                      </span>
+                      <span>{client.phone}</span>
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant flex-shrink-0">
-                {client.totalVisits} visitas
-              </span>
-            </div>
-
-            {/* Alerta Médica Destacada si existe */}
-            {client.hasMedicalAlert && (
-              <div className="bg-error-container/30 border border-error/20 p-2.5 rounded-xl flex items-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-[18px] text-error flex-shrink-0">
-                  warning
-                </span>
-                <span className="font-semibold text-on-error-container line-clamp-1">
-                  {client.medicalAlertDescription || 'Alerta médica crítica'}
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant flex-shrink-0">
+                  {client.totalVisits} {client.totalVisits === 1 ? 'visita' : 'visitas'}
                 </span>
               </div>
-            )}
 
-            {/* Tags Clínicos */}
-            <div className="flex flex-wrap gap-1.5">
-              {client.tags.map((t) => (
-                <span
-                  key={t}
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                    t.includes('Diabético') || t.includes('Látex')
-                      ? 'bg-error-container/50 text-error'
-                      : t.includes('VIP')
-                      ? 'bg-secondary-fixed text-on-secondary-fixed'
-                      : 'bg-surface-container-low text-on-surface-variant'
-                  }`}
+              {/* Alerta Médica Destacada si existe */}
+              {client.hasMedicalAlert && (
+                <div className="bg-error-container/30 border border-error/20 p-2.5 rounded-xl flex items-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-[18px] text-error flex-shrink-0">
+                    warning
+                  </span>
+                  <span className="font-semibold text-on-error-container line-clamp-1">
+                    {client.medicalAlertDescription || 'Alerta médica crítica'}
+                  </span>
+                </div>
+              )}
+
+              {/* Tags Clínicos */}
+              <div className="flex flex-wrap gap-1.5">
+                {client.tags.map((t) => (
+                  <span
+                    key={t}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                      t.includes('Diabético') || t.includes('Látex')
+                        ? 'bg-error-container/50 text-error'
+                        : t.includes('VIP')
+                        ? 'bg-secondary-fixed text-on-secondary-fixed'
+                        : 'bg-surface-container-low text-on-surface-variant'
+                    }`}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+
+              {/* Accesos Directos a Fichas Especializadas */}
+              <div className="pt-2 border-t border-surface-container-high/60 flex items-center justify-between gap-2">
+                <Link
+                  href={`/pacientes/${client.id}/podologia`}
+                  className="flex-1 py-2 px-3 rounded-xl bg-primary-container/10 text-primary hover:bg-primary-container hover:text-white transition-all text-xs font-bold text-center flex items-center justify-center gap-1"
                 >
-                  {t}
-                </span>
-              ))}
-            </div>
+                  <span className="material-symbols-outlined text-[15px]">footprint</span>
+                  <span>Ficha Podológica</span>
+                </Link>
 
-            {/* Accesos Directos a Fichas Especializadas */}
-            <div className="pt-2 border-t border-surface-container-high/60 flex items-center justify-between gap-2">
-              <Link
-                href={`/pacientes/${client.id}/podologia`}
-                className="flex-1 py-2 px-3 rounded-xl bg-primary-container/10 text-primary hover:bg-primary-container hover:text-white transition-all text-xs font-bold text-center flex items-center justify-center gap-1"
-              >
-                <span className="material-symbols-outlined text-[15px]">footprint</span>
-                <span>Ficha Podológica</span>
-              </Link>
-
-              <Link
-                href={`/pacientes/${client.id}/masaje`}
-                className="flex-1 py-2 px-3 rounded-xl bg-secondary-container/40 text-secondary hover:bg-secondary hover:text-white transition-all text-xs font-bold text-center flex items-center justify-center gap-1"
-              >
-                <span className="material-symbols-outlined text-[15px]">spa</span>
-                <span>Ficha Masaje</span>
-              </Link>
+                <Link
+                  href={`/pacientes/${client.id}/masaje`}
+                  className="flex-1 py-2 px-3 rounded-xl bg-secondary-container/40 text-secondary hover:bg-secondary hover:text-white transition-all text-xs font-bold text-center flex items-center justify-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[15px]">spa</span>
+                  <span>Ficha Masaje</span>
+                </Link>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Modal Crear Nuevo Paciente */}
       {isNewClientModalOpen && (
@@ -232,7 +281,7 @@ export default function ClientesPage() {
                 <input
                   type="text"
                   required
-                  placeholder="Ej. Mariana Morales"
+                  placeholder="Ej. Mariana Morales Soto"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-xs font-semibold text-on-surface"
@@ -268,18 +317,18 @@ export default function ClientesPage() {
 
               <div>
                 <label className="text-xs font-bold text-on-surface-variant block mb-1">
-                  Condición Principal / Alergias
+                  Condición Inicial / Alergias
                 </label>
                 <input
                   type="text"
-                  placeholder="Ej. Alergia a látex, onicocriptosis recurrente..."
+                  placeholder="Ej. Alergia a látex, onicocriptosis lateral..."
                   value={newCondition}
                   onChange={(e) => setNewCondition(e.target.value)}
                   className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-xs font-semibold text-on-surface"
                 />
               </div>
 
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-error-container/20 border border-error/20">
+              <div className="flex items-center gap-2.5 p-3 rounded-xl bg-error-container/20 border border-error/20">
                 <input
                   type="checkbox"
                   id="diabetic"
@@ -288,15 +337,26 @@ export default function ClientesPage() {
                   className="w-4 h-4 rounded text-error focus:ring-error"
                 />
                 <label htmlFor="diabetic" className="text-xs font-bold text-error cursor-pointer">
-                  Paciente con Diabetes Mellitus (Requiere protocolo clínico especial)
+                  Condición de Diabetes Mellitus (Activa alerta médica en agenda)
                 </label>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-xs shadow-md hover:bg-primary-container transition-all mt-2"
+                disabled={isSubmitting}
+                className="w-full py-3.5 rounded-xl bg-primary text-white font-bold text-xs shadow-md hover:bg-primary-container transition-all mt-2 flex items-center justify-center gap-2"
               >
-                Crear Ficha y Habilitar Expediente
+                {isSubmitting ? (
+                  <>
+                    <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+                    <span>Guardando en Supabase...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[16px]">save</span>
+                    <span>Crear Ficha y Guardar en Supabase</span>
+                  </>
+                )}
               </button>
             </form>
           </div>

@@ -17,7 +17,12 @@ export const dbService = {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error || !data || data.length === 0) {
+      if (error) {
+        console.error('Error al obtener clientes de Supabase:', error.message);
+        return INITIAL_CLIENTS;
+      }
+
+      if (!data || data.length === 0) {
         return INITIAL_CLIENTS;
       }
 
@@ -27,44 +32,54 @@ export const dbService = {
         phone: c.phone || '',
         email: c.email || '',
         birthdate: c.birthdate || '',
-        avatarUrl: c.avatar_url,
+        avatarUrl: c.avatar_url || undefined,
         tags: c.tags || [],
-        totalVisits: c.total_visits || 0,
+        totalVisits: c.total_visits || 1,
         lastVisit: c.last_visit,
         notes: c.notes,
         hasMedicalAlert: c.has_medical_alert || false,
         medicalAlertDescription: c.medical_alert_description,
         createdAt: c.created_at,
       }));
-    } catch {
+    } catch (err) {
+      console.error('Excepción al cargar clientes:', err);
       return INITIAL_CLIENTS;
     }
   },
 
-  async createClient(client: Omit<Client, 'id'>): Promise<Client> {
+  async createClient(client: Omit<Client, 'id' | 'createdAt'>): Promise<Client> {
+    const fallbackId = `cli-${Date.now()}`;
+    const fallbackClient: Client = {
+      id: fallbackId,
+      ...client,
+      createdAt: new Date().toISOString(),
+    };
+
     if (!isSupabaseConfigured()) {
-      return { id: `cli-${Date.now()}`, ...client };
+      return fallbackClient;
     }
+
     try {
       const { data, error } = await supabase
         .from('clients')
         .insert({
           name: client.name,
-          phone: client.phone,
-          email: client.email,
-          birthdate: client.birthdate,
-          avatar_url: client.avatarUrl,
-          tags: client.tags,
-          total_visits: client.totalVisits,
-          notes: client.notes,
-          has_medical_alert: client.hasMedicalAlert,
-          medical_alert_description: client.medicalAlertDescription,
+          phone: client.phone || null,
+          email: client.email || null,
+          birthdate: client.birthdate ? client.birthdate : null,
+          avatar_url: client.avatarUrl || null,
+          tags: client.tags || [],
+          total_visits: client.totalVisits || 1,
+          notes: client.notes || null,
+          has_medical_alert: client.hasMedicalAlert || false,
+          medical_alert_description: client.medicalAlertDescription || null,
         })
         .select()
         .single();
 
-      if (error || !data) {
-        return { id: `cli-${Date.now()}`, ...client };
+      if (error) {
+        console.error('Error insertando cliente en Supabase:', error.message, error.details);
+        return fallbackClient;
       }
 
       return {
@@ -73,16 +88,17 @@ export const dbService = {
         phone: data.phone || '',
         email: data.email || '',
         birthdate: data.birthdate || '',
-        avatarUrl: data.avatar_url,
+        avatarUrl: data.avatar_url || undefined,
         tags: data.tags || [],
-        totalVisits: data.total_visits || 0,
+        totalVisits: data.total_visits || 1,
         notes: data.notes,
         hasMedicalAlert: data.has_medical_alert || false,
         medicalAlertDescription: data.medical_alert_description,
         createdAt: data.created_at,
       };
-    } catch {
-      return { id: `cli-${Date.now()}`, ...client };
+    } catch (err) {
+      console.error('Excepción en createClient:', err);
+      return fallbackClient;
     }
   },
 
@@ -150,7 +166,7 @@ export const dbService = {
     }
   },
 
-  // EXPEDIENTE PODOLÓGICO
+  // EXPEDIENTES PODOLÓGICOS
   async getPodologyRecord(clientId: string): Promise<PodologyRecord> {
     if (!isSupabaseConfigured()) return INITIAL_SOFIA_PODOLOGY_RECORD;
     try {

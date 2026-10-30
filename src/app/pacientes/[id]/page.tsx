@@ -1,15 +1,42 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { INITIAL_CLIENTS } from '@/lib/mockData';
+import { dbService } from '@/lib/dbService';
+import { Client } from '@/types/database';
 
 export default function PacienteGeneralPage() {
   const params = useParams();
   const clientId = params.id as string;
 
-  const client = INITIAL_CLIENTS.find((c) => c.id === clientId) || INITIAL_CLIENTS[0];
+  const [client, setClient] = useState<Client | null>(null);
+
+  useEffect(() => {
+    dbService.getClients().then((clients) => {
+      const found = clients.find((c) => c.id === clientId) || clients[0];
+      setClient(found);
+    });
+  }, [clientId]);
+
+  if (!client) {
+    return (
+      <div className="py-20 flex flex-col items-center justify-center text-on-surface-variant gap-2">
+        <span className="material-symbols-outlined text-3xl animate-spin text-primary">sync</span>
+        <span className="text-xs">Cargando paciente...</span>
+      </div>
+    );
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  };
 
   return (
     <div className="flex flex-col w-full pb-12 space-y-5">
@@ -17,11 +44,18 @@ export default function PacienteGeneralPage() {
       <section className="bg-surface-container-lowest rounded-2xl shadow-xs border border-surface-container-high/60 p-4 sm:p-5 flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <img
-              src={client.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150'}
-              alt={client.name}
-              className="w-16 h-16 rounded-full object-cover shadow-sm ring-2 ring-primary/20"
-            />
+            {client.avatarUrl ? (
+              <img
+                src={client.avatarUrl}
+                alt={client.name}
+                className="w-16 h-16 rounded-full object-cover shadow-sm ring-2 ring-primary/20"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-primary-container/10 border border-primary-container/20 text-primary font-bold text-lg flex items-center justify-center flex-shrink-0 shadow-xs">
+                {getInitials(client.name)}
+              </div>
+            )}
+
             <div className="min-w-0">
               <h1 className="font-serif text-2xl text-on-surface font-bold truncate">
                 {client.name}
@@ -29,13 +63,17 @@ export default function PacienteGeneralPage() {
               <p className="text-xs text-on-surface-variant flex items-center gap-2 mt-0.5">
                 <span className="material-symbols-outlined text-sm text-secondary">phone_iphone</span>
                 <span>{client.phone}</span>
-                <span>•</span>
-                <span>{client.email}</span>
+                {client.email && (
+                  <>
+                    <span>•</span>
+                    <span className="truncate">{client.email}</span>
+                  </>
+                )}
               </p>
             </div>
           </div>
 
-          <span className="text-xs font-bold px-3 py-1 rounded-full bg-primary-container/10 text-primary-container">
+          <span className="text-xs font-bold px-3 py-1 rounded-full bg-primary-container/10 text-primary-container flex-shrink-0">
             {client.totalVisits} visitas registradas
           </span>
         </div>
@@ -51,7 +89,7 @@ export default function PacienteGeneralPage() {
                 Condición Médica de Cuidado
               </span>
               <p className="text-xs text-on-surface font-semibold mt-0.5">
-                {client.medicalAlertDescription}
+                {client.medicalAlertDescription || 'Paciente con protocolo clínico especial.'}
               </p>
             </div>
           </div>
@@ -131,14 +169,14 @@ export default function PacienteGeneralPage() {
         </div>
       </div>
 
-      {/* Acciones de Fidelización y Retorno WhatsApp */}
+      {/* Recordatorios de Retorno WhatsApp */}
       <section className="bg-surface-container-low p-4 sm:p-5 rounded-2xl border border-surface-container-high flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h4 className="font-serif text-base font-bold text-primary">
             Recordatorio de Retorno Podológico (Cada 6-8 semanas)
           </h4>
           <p className="text-xs text-on-surface-variant mt-0.5">
-            Última visita registrada el {client.lastVisit || 'hace 3 semanas'}. Envía un mensaje
+            Última visita registrada: {client.lastVisit || 'Hace 3 semanas'}. Envía un mensaje
             personalizado para agendar su próxima sesión preventiva.
           </p>
         </div>

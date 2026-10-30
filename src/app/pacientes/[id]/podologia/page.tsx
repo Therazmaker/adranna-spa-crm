@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { INITIAL_SOFIA_PODOLOGY_RECORD, INITIAL_CLIENTS } from '@/lib/mockData';
-import { PodologyRecord, FootFinding } from '@/types/database';
+import { dbService } from '@/lib/dbService';
+import { PodologyRecord, FootFinding, Client } from '@/types/database';
 import AnatomicalFootMap from '@/components/AnatomicalFootMap';
 import SignaturePad from '@/components/SignaturePad';
 
@@ -12,10 +13,10 @@ export default function PodologiaRecordPage() {
   const params = useParams();
   const clientId = params.id as string;
 
-  const client = INITIAL_CLIENTS.find((c) => c.id === clientId) || INITIAL_CLIENTS[0];
+  const [client, setClient] = useState<Client>(INITIAL_CLIENTS[0]);
   const [record, setRecord] = useState<PodologyRecord>(INITIAL_SOFIA_PODOLOGY_RECORD);
-  const [activeTab, setActiveTab] = useState<'podologia' | 'masajes' | 'historial' | 'resumen'>('podologia');
   const [isSavedBannerVisible, setIsSavedBannerVisible] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Risk Factors State
   const [diabetes, setDiabetes] = useState(record.diabetesMellitus);
@@ -24,6 +25,26 @@ export default function PodologiaRecordPage() {
   const [latexAllergy, setLatexAllergy] = useState(record.latexAllergy);
   const [treatmentNotes, setTreatmentNotes] = useState(record.appliedTreatment);
 
+  useEffect(() => {
+    dbService.getClients().then((clients) => {
+      const found = clients.find((c) => c.id === clientId);
+      if (found) {
+        setClient(found);
+      }
+    });
+
+    dbService.getPodologyRecord(clientId).then((rec) => {
+      if (rec) {
+        setRecord(rec);
+        setDiabetes(rec.diabetesMellitus);
+        setHypertension(rec.hypertension);
+        setCirculation(rec.peripheralCirculation);
+        setLatexAllergy(rec.latexAllergy);
+        setTreatmentNotes(rec.appliedTreatment);
+      }
+    });
+  }, [clientId]);
+
   const handleAddFinding = (newFinding: FootFinding) => {
     setRecord({
       ...record,
@@ -31,9 +52,38 @@ export default function PodologiaRecordPage() {
     });
   };
 
-  const handleSaveRecord = () => {
+  const handleSaveRecord = async () => {
+    setIsSaving(true);
+    const updatedRecord: PodologyRecord = {
+      ...record,
+      diabetesMellitus: diabetes,
+      hypertension,
+      peripheralCirculation: circulation,
+      latexAllergy,
+      appliedTreatment: treatmentNotes,
+      audit: {
+        lastEditedBy: 'Dra. Elena Valdés',
+        professionalLicense: 'Céd. Prof. 8492019',
+        lastEditedAt: new Date().toLocaleString('es-MX'),
+        cabin: 'Cabina Podología 2',
+      },
+    };
+
+    await dbService.savePodologyRecord(updatedRecord);
+    setRecord(updatedRecord);
+    setIsSaving(false);
     setIsSavedBannerVisible(true);
-    setTimeout(() => setIsSavedBannerVisible(false), 3000);
+    setTimeout(() => setIsSavedBannerVisible(false), 3500);
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .filter(Boolean)
+      .map((part) => part[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
   };
 
   return (
@@ -42,7 +92,7 @@ export default function PodologiaRecordPage() {
       {isSavedBannerVisible && (
         <div className="fixed top-20 right-4 z-50 bg-tertiary text-white px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 text-xs font-bold animate-bounce">
           <span className="material-symbols-outlined text-[18px]">verified</span>
-          <span>Expediente Clínico Guardado con Auditoría de Firma</span>
+          <span>Expediente Clínico Guardado y Sincronizado en Supabase</span>
         </div>
       )}
 
@@ -51,11 +101,17 @@ export default function PodologiaRecordPage() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative flex-shrink-0">
-              <img
-                src={client.avatarUrl || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150'}
-                alt={client.name}
-                className="w-16 h-16 rounded-full object-cover shadow-sm ring-2 ring-primary-container/20"
-              />
+              {client.avatarUrl ? (
+                <img
+                  src={client.avatarUrl}
+                  alt={client.name}
+                  className="w-16 h-16 rounded-full object-cover shadow-sm ring-2 ring-primary-container/20"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-primary-container/10 border border-primary-container/20 text-primary font-bold text-lg flex items-center justify-center flex-shrink-0 shadow-xs">
+                  {getInitials(client.name)}
+                </div>
+              )}
               <div className="absolute -bottom-1 -right-1 bg-tertiary-fixed text-on-tertiary-fixed p-1 rounded-full shadow-xs flex items-center justify-center">
                 <span className="material-symbols-outlined text-sm font-bold">verified</span>
               </div>
@@ -143,7 +199,7 @@ export default function PodologiaRecordPage() {
             type="button"
             className="px-3.5 py-2 rounded-xl text-xs font-bold text-on-surface-variant bg-surface-container-low hover:bg-surface-container transition-colors whitespace-nowrap"
           >
-            Historial de Visitas (8)
+            Historial de Visitas ({record.evolutionHistory.length})
           </button>
         </div>
       </section>
@@ -324,7 +380,7 @@ export default function PodologiaRecordPage() {
           </div>
           <button
             type="button"
-            onClick={() => alert('Selector de captura de imagen o carga desde galería médica')}
+            onClick={() => alert('Selector de captura de imagen médica habilitado')}
             className="text-xs text-primary flex items-center gap-1 font-bold hover:underline"
           >
             <span className="material-symbols-outlined text-sm">add_a_photo</span>
@@ -437,7 +493,7 @@ export default function PodologiaRecordPage() {
       {/* 6. CONSENTIMIENTO INFORMADO & FIRMA DIGITAL */}
       <SignaturePad
         signerName={client.name}
-        idDoc={record.informedConsent.signerIdDoc}
+        idDoc={record.informedConsent.signerIdDoc || 'INE-REG'}
         initialSignatureSvg={record.informedConsent.signatureSvg}
         initialTimestamp={record.informedConsent.signatureTimestamp}
         initialHash={record.informedConsent.sha256Hash}
@@ -472,10 +528,20 @@ export default function PodologiaRecordPage() {
           <button
             type="button"
             onClick={handleSaveRecord}
+            disabled={isSaving}
             className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl bg-primary text-white hover:bg-primary-container text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95"
           >
-            <span className="material-symbols-outlined text-[16px]">save</span>
-            <span>Guardar Registro Clínico</span>
+            {isSaving ? (
+              <>
+                <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>
+                <span>Guardando...</span>
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-[16px]">save</span>
+                <span>Guardar Registro Clínico</span>
+              </>
+            )}
           </button>
         </div>
       </section>
