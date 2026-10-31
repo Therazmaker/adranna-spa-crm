@@ -13,6 +13,7 @@ export default function AgendaPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [filterProfessional, setFilterProfessional] = useState<string>('all');
+  const [statusTab, setStatusTab] = useState<'activas' | 'finalizadas'>('activas');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
 
   useEffect(() => {
@@ -21,13 +22,24 @@ export default function AgendaPage() {
     dbService.getProfessionals().then(setProfessionals);
   }, []);
 
-  const filteredAppointments = appointments.filter((apt) => {
+  const byProfessional = appointments.filter((apt) => {
     if (filterProfessional === 'all') return true;
     return apt.professionalName.toLowerCase().includes(filterProfessional.toLowerCase());
   });
 
+  const activeAppointments = byProfessional.filter(
+    (apt) => apt.status !== 'completado' && apt.status !== 'cancelado'
+  );
+  const completedAppointments = byProfessional.filter(
+    (apt) => apt.status === 'completado' || apt.status === 'cancelado'
+  );
+
+  const displayedAppointments =
+    statusTab === 'activas' ? activeAppointments : completedAppointments;
+
   const handleAddAppointment = (newApt: Appointment) => {
     setAppointments((prev) => [newApt, ...prev]);
+    setStatusTab('activas');
   };
 
   const handleUpdateAppointment = (updated: Appointment) => {
@@ -36,12 +48,22 @@ export default function AgendaPage() {
     setEditingAppointment(null);
   };
 
+  const applyStatusChange = (apt: Appointment, newStatus: Appointment['status']) => {
+    const updated = { ...apt, status: newStatus };
+    dbService.updateAppointment(apt.id, { status: newStatus });
+    setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+
+    // Si se marca como completada o se reabre desde el detalle, cerramos el panel para que pase de pestaña limpiamente
+    if (newStatus === 'completado' || (apt.status === 'completado' && newStatus === 'confirmado')) {
+      setSelectedAppointment(null);
+    } else if (selectedAppointment?.id === apt.id) {
+      setSelectedAppointment(updated);
+    }
+  };
+
   const handleStatusChange = (newStatus: Appointment['status']) => {
     if (!selectedAppointment) return;
-    const updated = { ...selectedAppointment, status: newStatus };
-    dbService.updateAppointment(selectedAppointment.id, { status: newStatus });
-    setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-    setSelectedAppointment(updated);
+    applyStatusChange(selectedAppointment, newStatus);
   };
 
   const handleEditAppointment = (apt: Appointment) => {
@@ -66,7 +88,7 @@ export default function AgendaPage() {
             Agenda Clínica & Spa
           </h1>
           <p className="text-xs text-on-surface-variant mt-0.5">
-            {appointments.length} citas registradas en total
+            {activeAppointments.length} por atender · {completedAppointments.length} finalizadas
           </p>
         </div>
 
@@ -76,6 +98,53 @@ export default function AgendaPage() {
         >
           <span className="material-symbols-outlined text-[18px]">add</span>
           <span>+ Nueva Cita</span>
+        </button>
+      </div>
+
+      {/* Pestañas: Por Atender vs Finalizadas */}
+      <div className="grid grid-cols-2 bg-surface-container p-1 rounded-2xl border border-surface-container-high text-xs font-bold">
+        <button
+          type="button"
+          onClick={() => setStatusTab('activas')}
+          className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            statusTab === 'activas'
+              ? 'bg-surface-container-lowest text-primary shadow-xs'
+              : 'text-on-surface-variant hover:text-primary'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">pending_actions</span>
+          <span>Por Atender</span>
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+              statusTab === 'activas'
+                ? 'bg-primary text-white'
+                : 'bg-surface-container-high text-on-surface-variant'
+            }`}
+          >
+            {activeAppointments.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setStatusTab('finalizadas')}
+          className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            statusTab === 'finalizadas'
+              ? 'bg-surface-container-lowest text-primary shadow-xs'
+              : 'text-on-surface-variant hover:text-primary'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">task_alt</span>
+          <span>Finalizadas</span>
+          <span
+            className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+              statusTab === 'finalizadas'
+                ? 'bg-emerald-700 text-white'
+                : 'bg-surface-container-high text-on-surface-variant'
+            }`}
+          >
+            {completedAppointments.length}
+          </span>
         </button>
       </div>
 
@@ -91,7 +160,7 @@ export default function AgendaPage() {
             }`}
           >
             <span className="material-symbols-outlined text-[16px]">groups</span>
-            <span>Todos ({appointments.length})</span>
+            <span>Todos</span>
           </button>
 
           {professionals.map((prof) => (
@@ -112,26 +181,37 @@ export default function AgendaPage() {
       )}
 
       {/* Citas listadas */}
-      <div className="mt-2 flex flex-col gap-3">
-        {filteredAppointments.length === 0 ? (
+      <div className="mt-1 flex flex-col gap-3">
+        {displayedAppointments.length === 0 ? (
           <div className="py-12 flex flex-col items-center gap-3 bg-surface-container-lowest rounded-3xl p-8 border border-dashed border-surface-container-high text-center">
-            <span className="material-symbols-outlined text-4xl text-outline">event_busy</span>
+            <span className="material-symbols-outlined text-4xl text-outline">
+              {statusTab === 'activas' ? 'event_available' : 'history'}
+            </span>
             <div>
-              <span className="text-sm font-bold text-on-surface block">No hay citas en este filtro</span>
+              <span className="text-sm font-bold text-on-surface block">
+                {statusTab === 'activas'
+                  ? 'No hay citas pendientes por atender'
+                  : 'Aún no hay sesiones finalizadas'}
+              </span>
               <span className="text-xs text-on-surface-variant block mt-0.5">
-                Crea una nueva cita asignando paciente, servicio y profesional.
+                {statusTab === 'activas'
+                  ? 'Todas las sesiones fueron atendidas o puedes agendar una nueva cita.'
+                  : 'Las citas que marques como finalizadas aparecerán aquí como historial.'}
               </span>
             </div>
-            <button
-              onClick={() => { setEditingAppointment(null); setIsNewAppointmentOpen(true); }}
-              className="mt-1 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-container transition-all"
-            >
-              + Agendar Cita
-            </button>
+            {statusTab === 'activas' && (
+              <button
+                onClick={() => { setEditingAppointment(null); setIsNewAppointmentOpen(true); }}
+                className="mt-1 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-container transition-all"
+              >
+                + Agendar Cita
+              </button>
+            )}
           </div>
         ) : (
-          filteredAppointments.map((apt) => {
+          displayedAppointments.map((apt) => {
             const isPodo = apt.discipline === 'podologia';
+            const isCompleted = apt.status === 'completado';
             return (
               <div key={apt.id} className="flex gap-3 items-start">
                 <div className="w-14 flex-shrink-0 text-right pt-2">
@@ -145,11 +225,17 @@ export default function AgendaPage() {
 
                 <div
                   onClick={() => setSelectedAppointment(apt)}
-                  className="flex-1 bg-surface-container-lowest rounded-2xl p-4 shadow-xs border border-surface-container-high/60 cursor-pointer transition-all hover:shadow-md relative overflow-hidden"
+                  className={`flex-1 bg-surface-container-lowest rounded-2xl p-4 shadow-xs border border-surface-container-high/60 cursor-pointer transition-all hover:shadow-md relative overflow-hidden ${
+                    isCompleted ? 'opacity-85' : ''
+                  }`}
                 >
                   <div
                     className={`absolute left-0 top-0 bottom-0 w-1.5 ${
-                      isPodo ? 'bg-primary-container' : 'bg-secondary'
+                      isCompleted
+                        ? 'bg-emerald-600'
+                        : isPodo
+                        ? 'bg-primary-container'
+                        : 'bg-secondary'
                     }`}
                   />
                   <div className="flex items-start justify-between gap-2 pl-2">
@@ -179,7 +265,7 @@ export default function AgendaPage() {
                         )}
                       </h3>
 
-                      <div className="flex items-center gap-3 mt-1 text-xs text-on-surface-variant">
+                      <div className="flex items-center gap-3 mt-1 text-xs text-on-surface-variant flex-wrap">
                         <span className="flex items-center gap-1">
                           <span className="material-symbols-outlined text-[15px] text-primary">
                             badge
@@ -195,13 +281,54 @@ export default function AgendaPage() {
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end flex-shrink-0">
-                      <span className="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] font-bold">
-                        {apt.status === 'en_curso' ? 'En Curso' : apt.status === 'completado' ? 'Completada' : 'Confirmada'}
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                          apt.status === 'en_curso'
+                            ? 'bg-amber-100 text-amber-800'
+                            : isCompleted
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-surface-container-high text-on-surface-variant'
+                        }`}
+                      >
+                        {apt.status === 'en_curso'
+                          ? 'En Curso'
+                          : isCompleted
+                          ? 'Finalizada'
+                          : 'Confirmada'}
                       </span>
-                      <span className="text-xs font-bold text-primary mt-2">
+                      <span className="text-xs font-bold text-primary">
                         S/ {apt.price}
                       </span>
+
+                      {/* Acción rápida en 1 toque */}
+                      {!isCompleted ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            applyStatusChange(apt, 'completado');
+                          }}
+                          title="Marcar sesión como finalizada"
+                          className="mt-0.5 px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-[11px] font-bold hover:bg-emerald-800 active:scale-95 transition-all flex items-center gap-1 shadow-2xs"
+                        >
+                          <span className="material-symbols-outlined text-[13px]">check</span>
+                          <span>Finalizar</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            applyStatusChange(apt, 'confirmado');
+                          }}
+                          title="Devolver a citas por atender"
+                          className="mt-0.5 px-2 py-1 rounded-lg bg-surface-container-high text-on-surface-variant text-[10px] font-bold hover:text-primary transition-colors flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-[13px]">replay</span>
+                          <span>Reabrir</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

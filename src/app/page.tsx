@@ -21,6 +21,7 @@ export default function DashboardPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [filterDiscipline, setFilterDiscipline] = useState<'all' | 'podologia' | 'masaje'>('all');
+  const [statusTab, setStatusTab] = useState<'activas' | 'finalizadas'>('activas');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
   const [deletingAptId, setDeletingAptId] = useState<string | null>(null);
 
@@ -48,10 +49,19 @@ export default function DashboardPage() {
   const todayStr = new Date().toISOString().slice(0, 10);
   const todayApts = appointments.filter((a) => a.date === todayStr || !a.date);
 
-  const filteredAppointments = appointments.filter((apt) => {
+  const byDiscipline = appointments.filter((apt) => {
     if (filterDiscipline === 'all') return true;
     return apt.discipline === filterDiscipline;
   });
+
+  const activeAppointments = byDiscipline.filter(
+    (apt) => apt.status !== 'completado' && apt.status !== 'cancelado'
+  );
+  const completedAppointments = byDiscipline.filter(
+    (apt) => apt.status === 'completado' || apt.status === 'cancelado'
+  );
+  const filteredAppointments =
+    statusTab === 'activas' ? activeAppointments : completedAppointments;
 
   const todayRevenue = todayApts.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
   const podoCount = todayApts.filter((a) => a.discipline === 'podologia').length;
@@ -59,6 +69,7 @@ export default function DashboardPage() {
 
   const handleAddAppointment = (newApt: Appointment) => {
     setAppointments((prev) => [newApt, ...prev]);
+    setStatusTab('activas');
   };
 
   const handleUpdateAppointment = (updated: Appointment) => {
@@ -67,12 +78,21 @@ export default function DashboardPage() {
     setEditingAppointment(null);
   };
 
+  const applyStatusChange = (apt: Appointment, newStatus: Appointment['status']) => {
+    const updated = { ...apt, status: newStatus };
+    dbService.updateAppointment(apt.id, { status: newStatus });
+    setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+
+    if (newStatus === 'completado' || (apt.status === 'completado' && newStatus === 'confirmado')) {
+      setSelectedAppointment(null);
+    } else if (selectedAppointment?.id === apt.id) {
+      setSelectedAppointment(updated);
+    }
+  };
+
   const handleStatusChange = (newStatus: Appointment['status']) => {
     if (!selectedAppointment) return;
-    const updated = { ...selectedAppointment, status: newStatus };
-    dbService.updateAppointment(selectedAppointment.id, { status: newStatus });
-    setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
-    setSelectedAppointment(updated);
+    applyStatusChange(selectedAppointment, newStatus);
   };
 
   const handleEditAppointment = (apt: Appointment) => {
@@ -274,7 +294,9 @@ export default function DashboardPage() {
           <div>
             <h2 className="font-serif text-xl text-primary font-bold">Citas & Agenda</h2>
             <span className="text-xs text-on-surface-variant">
-              {isLoading ? 'Cargando citas...' : `${filteredAppointments.length} citas registradas`}
+              {isLoading
+                ? 'Cargando citas...'
+                : `${activeAppointments.length} por atender · ${completedAppointments.length} finalizadas`}
             </span>
           </div>
           <div className="flex items-center gap-1 bg-surface-container-high p-1 rounded-xl text-xs font-semibold">
@@ -311,6 +333,53 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Pestañas: Por Atender vs Finalizadas */}
+        <div className="grid grid-cols-2 bg-surface-container p-1 rounded-2xl border border-surface-container-high text-xs font-bold">
+          <button
+            type="button"
+            onClick={() => setStatusTab('activas')}
+            className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              statusTab === 'activas'
+                ? 'bg-surface-container-lowest text-primary shadow-xs'
+                : 'text-on-surface-variant hover:text-primary'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">pending_actions</span>
+            <span>Por Atender</span>
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                statusTab === 'activas'
+                  ? 'bg-primary text-white'
+                  : 'bg-surface-container-high text-on-surface-variant'
+              }`}
+            >
+              {activeAppointments.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setStatusTab('finalizadas')}
+            className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+              statusTab === 'finalizadas'
+                ? 'bg-surface-container-lowest text-primary shadow-xs'
+                : 'text-on-surface-variant hover:text-primary'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">task_alt</span>
+            <span>Finalizadas</span>
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                statusTab === 'finalizadas'
+                  ? 'bg-emerald-700 text-white'
+                  : 'bg-surface-container-high text-on-surface-variant'
+              }`}
+            >
+              {completedAppointments.length}
+            </span>
+          </button>
+        </div>
+
         {/* Lista de Citas */}
         {isLoading ? (
           <div className="py-8 flex flex-col items-center gap-2 text-on-surface-variant">
@@ -319,25 +388,36 @@ export default function DashboardPage() {
           </div>
         ) : filteredAppointments.length === 0 ? (
           <div className="py-12 flex flex-col items-center gap-3 bg-surface-container-lowest rounded-3xl p-8 border border-dashed border-surface-container-high text-center">
-            <span className="material-symbols-outlined text-4xl text-outline">event_busy</span>
+            <span className="material-symbols-outlined text-4xl text-outline">
+              {statusTab === 'activas' ? 'event_available' : 'history'}
+            </span>
             <div>
-              <span className="text-sm font-bold text-on-surface block">Sin citas programadas</span>
+              <span className="text-sm font-bold text-on-surface block">
+                {statusTab === 'activas'
+                  ? 'No hay citas pendientes por atender'
+                  : 'Aún no hay sesiones finalizadas'}
+              </span>
               <span className="text-xs text-on-surface-variant block mt-0.5">
-                Agenda tu primera cita con los tratamientos y profesionales de tu clínica.
+                {statusTab === 'activas'
+                  ? 'Agenda una nueva cita con los tratamientos y profesionales de tu clínica.'
+                  : 'Las citas que marques como finalizadas aparecerán aquí como historial.'}
               </span>
             </div>
-            <button
-              onClick={() => { setEditingAppointment(null); setIsNewAppointmentOpen(true); }}
-              className="mt-1 px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-container transition-all flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-[16px]">add</span>
-              <span>+ Agendar Primera Cita</span>
-            </button>
+            {statusTab === 'activas' && (
+              <button
+                onClick={() => { setEditingAppointment(null); setIsNewAppointmentOpen(true); }}
+                className="mt-1 px-4 py-2.5 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-container transition-all flex items-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                <span>+ Agendar Cita</span>
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-3">
             {filteredAppointments.map((apt) => {
               const isPodo = apt.discipline === 'podologia';
+              const isCompleted = apt.status === 'completado';
               return (
                 <article
                   key={apt.id}
@@ -346,7 +426,11 @@ export default function DashboardPage() {
                 >
                   <div
                     className={`w-2 flex-shrink-0 ${
-                      isPodo ? 'bg-primary-container' : 'bg-secondary'
+                      isCompleted
+                        ? 'bg-emerald-600'
+                        : isPodo
+                        ? 'bg-primary-container'
+                        : 'bg-secondary'
                     }`}
                   />
                   <div className="flex-1 p-3.5 flex flex-col gap-2 min-w-0">
@@ -376,10 +460,10 @@ export default function DashboardPage() {
                             </span>
                           )}
 
-                          {apt.status === 'completado' && (
-                            <span className="px-1.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed text-[10px] font-bold flex items-center gap-0.5">
+                          {isCompleted && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center gap-0.5">
                               <span className="material-symbols-outlined text-[12px]">check</span>
-                              Completada
+                              Finalizada
                             </span>
                           )}
 
@@ -422,9 +506,38 @@ export default function DashboardPage() {
                           {apt.professionalName} • {apt.cabinName}
                         </span>
                       </div>
-                      <span className="font-serif font-bold text-primary flex-shrink-0">
-                        S/ {apt.price} PEN
-                      </span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="font-serif font-bold text-primary">
+                          S/ {apt.price} PEN
+                        </span>
+                        {!isCompleted ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              applyStatusChange(apt, 'completado');
+                            }}
+                            title="Marcar sesión como finalizada"
+                            className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-[11px] font-bold hover:bg-emerald-800 active:scale-95 transition-all flex items-center gap-1 shadow-2xs"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">check</span>
+                            <span>Finalizar</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              applyStatusChange(apt, 'confirmado');
+                            }}
+                            title="Devolver a citas por atender"
+                            className="px-2 py-1 rounded-lg bg-surface-container-high text-on-surface-variant text-[10px] font-bold hover:text-primary transition-colors flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">replay</span>
+                            <span>Reabrir</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </article>

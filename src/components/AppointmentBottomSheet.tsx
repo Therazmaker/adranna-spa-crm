@@ -147,13 +147,35 @@ export default function AppointmentBottomSheet({
 
         {/* Actions */}
         <div className="mt-4 flex flex-col gap-2">
-          <Link
-            href={`/pacientes/${appointment.clientId}/${isPodology ? 'podologia' : 'masaje'}`}
-            className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-md hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[20px]">clinical_notes</span>
-            <span>Abrir Ficha Clínica</span>
-          </Link>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <Link
+              href={`/pacientes/${appointment.clientId}/${isPodology ? 'podologia' : 'masaje'}`}
+              className="w-full py-3 rounded-xl bg-primary text-white text-xs sm:text-sm font-bold shadow-md hover:bg-primary-container active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[19px]">clinical_notes</span>
+              <span>Abrir Ficha Clínica</span>
+            </Link>
+
+            {appointment.status !== 'completado' ? (
+              <button
+                type="button"
+                onClick={() => onStatusChange?.('completado')}
+                className="w-full py-3 rounded-xl bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-md hover:bg-emerald-800 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[19px]">task_alt</span>
+                <span>Finalizar Sesión</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onStatusChange?.('confirmado')}
+                className="w-full py-3 rounded-xl bg-surface-container-high text-primary text-xs sm:text-sm font-bold hover:bg-surface-variant transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[19px]">replay</span>
+                <span>Reabrir Cita</span>
+              </button>
+            )}
+          </div>
 
           <div className="grid grid-cols-2 gap-2">
             <a
@@ -166,22 +188,30 @@ export default function AppointmentBottomSheet({
               WhatsApp
             </a>
 
-            <button
-              type="button"
-              onClick={() => {
-                const next: Appointment['status'] =
-                  appointment.status === 'confirmado' ? 'en_curso' :
-                  appointment.status === 'en_curso'  ? 'completado' :
-                  'confirmado';
-                onStatusChange?.(next);
-              }}
-              className="py-2.5 rounded-xl bg-surface-container-high text-primary text-xs font-bold hover:bg-surface-variant transition-colors flex items-center justify-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-[18px]">
-                {appointment.status === 'en_curso' ? 'done_all' : 'play_circle'}
+            {appointment.status === 'confirmado' ? (
+              <button
+                type="button"
+                onClick={() => onStatusChange?.('en_curso')}
+                className="py-2.5 rounded-xl bg-surface-container-high text-primary text-xs font-bold hover:bg-surface-variant transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[18px]">play_circle</span>
+                Marcar En Curso
+              </button>
+            ) : appointment.status === 'en_curso' ? (
+              <button
+                type="button"
+                onClick={() => onStatusChange?.('confirmado')}
+                className="py-2.5 rounded-xl bg-surface-container-high text-on-surface-variant text-xs font-bold hover:bg-surface-variant transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span className="material-symbols-outlined text-[18px]">schedule</span>
+                Volver a Confirmada
+              </button>
+            ) : (
+              <span className="py-2.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center justify-center gap-1.5">
+                <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                Sesión Finalizada
               </span>
-              {appointment.status === 'en_curso' ? 'Finalizar' : appointment.status === 'completado' ? 'Reabrir' : 'Iniciar'}
-            </button>
+            )}
           </div>
         </div>
       </div>
