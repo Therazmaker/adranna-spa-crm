@@ -87,6 +87,17 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
         )}
 
         <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Link
+              href="/usuarios"
+              title="Usuarios y roles"
+              aria-label="Usuarios y roles"
+              className="w-9 h-9 flex items-center justify-center rounded-full text-primary hover:bg-surface-container-high transition-colors"
+            >
+              <span className="material-symbols-outlined text-[22px]">manage_accounts</span>
+            </Link>
+          )}
+
           {/* Badge de Rol */}
           <span className={`hidden sm:inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full border shadow-2xs ${currentRole.color}`}>
             {currentRole.label}

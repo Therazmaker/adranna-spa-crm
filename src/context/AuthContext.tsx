@@ -9,20 +9,18 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   role: UserRole;
-  setRole: (role: UserRole) => void;
   isAdmin: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string, role?: UserRole) => Promise<{ error: string | null; message?: string }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null; message?: string }>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
-  role: 'admin',
-  setRole: () => {},
-  isAdmin: true,
+  role: 'recepcion',
+  isAdmin: false,
   isLoading: true,
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
@@ -31,39 +29,30 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
+const VALID_ROLES: UserRole[] = ['admin', 'recepcion', 'terapeuta'];
+
+/**
+ * El rol sale de `app_metadata.role`, que SOLO puede modificar el servidor con la
+ * service role key (el usuario no puede editarlo). Si no tiene rol asignado, se
+ * le da el de menor privilegio (recepción) hasta que un admin le asigne uno.
+ */
+function resolveRole(user: User | null): UserRole {
+  const r = user?.app_metadata?.role as UserRole | undefined;
+  return r && VALID_ROLES.includes(r) ? r : 'recepcion';
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [role, setRoleState] = useState<UserRole>('admin');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Helper para asignar rol y guardarlo
-  const setRole = (newRole: UserRole) => {
-    setRoleState(newRole);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('adranna_user_role', newRole);
-    }
-  };
+  const role = resolveRole(user);
 
   useEffect(() => {
-    // 1. Obtener rol guardado en localStorage si existe
-    const savedRole = (typeof window !== 'undefined' ? localStorage.getItem('adranna_user_role') : null) as UserRole | null;
-
     if (isSupabaseConfigured()) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         setSession(session);
-        const currentUser = session?.user ?? null;
-        setUser(currentUser);
-
-        const metadataRole = currentUser?.user_metadata?.role as UserRole | undefined;
-        if (savedRole) {
-          setRoleState(savedRole);
-        } else if (metadataRole) {
-          setRoleState(metadataRole);
-        } else {
-          setRoleState('admin'); // Por defecto el primer usuario registrado es admin
-        }
-
+        setUser(session?.user ?? null);
         setIsLoading(false);
       });
 
@@ -71,27 +60,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((_event, session) => {
         setSession(session);
-        const currentUser = session?.user ?? null;
-        setUser(currentUser);
-
-        const metadataRole = currentUser?.user_metadata?.role as UserRole | undefined;
-        if (savedRole) {
-          setRoleState(savedRole);
-        } else if (metadataRole) {
-          setRoleState(metadataRole);
-        }
-
+        setUser(session?.user ?? null);
         setIsLoading(false);
       });
 
       return () => subscription.unsubscribe();
     } else {
+      // Modo local sin Supabase: sesión simulada con rol admin
       const savedUser = typeof window !== 'undefined' ? localStorage.getItem('adranna_auth_user') : null;
       if (savedUser) {
         try {
-          const parsed = JSON.parse(savedUser);
-          setUser(parsed);
-          setRoleState(savedRole || (parsed.user_metadata?.role as UserRole) || 'admin');
+          setUser(JSON.parse(savedUser));
         } catch {
           // ignore
         }
@@ -102,29 +81,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
     if (!isSupabaseConfigured()) {
-      const mockUser = { id: 'usr-admin', email, user_metadata: { full_name: 'Administrador', role: 'admin' } } as unknown as User;
+      const mockUser = {
+        id: 'usr-admin',
+        email,
+        app_metadata: { role: 'admin' },
+        user_metadata: { full_name: 'Administrador' },
+      } as unknown as User;
       setUser(mockUser);
-      setRole('admin');
       localStorage.setItem('adranna_auth_user', JSON.stringify(mockUser));
       return { error: null };
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        return { error: error.message };
-      }
-
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: error.message };
       setUser(data.user);
       setSession(data.session);
-
-      const assignedRole = (data.user?.user_metadata?.role as UserRole) || 'admin';
-      setRole(assignedRole);
-
       return { error: null };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error desconocido al iniciar sesión';
@@ -135,13 +107,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (
     email: string,
     password: string,
-    fullName: string,
-    assignedRole: UserRole = 'terapeuta'
+    fullName: string
   ): Promise<{ error: string | null; message?: string }> => {
     if (!isSupabaseConfigured()) {
-      const mockUser = { id: `usr-${Date.now()}`, email, user_metadata: { full_name: fullName, role: assignedRole } } as unknown as User;
+      const mockUser = {
+        id: `usr-${Date.now()}`,
+        email,
+        app_metadata: { role: 'admin' },
+        user_metadata: { full_name: fullName },
+      } as unknown as User;
       setUser(mockUser);
-      setRole(assignedRole);
       localStorage.setItem('adranna_auth_user', JSON.stringify(mockUser));
       return { error: null };
     }
@@ -150,17 +125,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-            role: assignedRole,
-          },
-        },
+        options: { data: { full_name: fullName } },
       });
 
-      if (error) {
-        return { error: error.message };
-      }
+      if (error) return { error: error.message };
 
       if (data.user && !data.session) {
         return {
@@ -171,7 +139,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(data.user);
       setSession(data.session);
-      setRole(assignedRole);
       return { error: null };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al registrar usuario';
@@ -195,17 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{
-        user,
-        session,
-        role,
-        setRole,
-        isAdmin,
-        isLoading,
-        signIn,
-        signUp,
-        signOut,
-      }}
+      value={{ user, session, role, isAdmin, isLoading, signIn, signUp, signOut }}
     >
       {children}
     </AuthContext.Provider>

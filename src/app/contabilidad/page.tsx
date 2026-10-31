@@ -22,7 +22,7 @@ const PAYMENT_METHODS = [
 ];
 
 export default function ContabilidadPage() {
-  const { role, setRole, isAdmin } = useAuth();
+  const { role, isAdmin } = useAuth();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -81,13 +81,6 @@ export default function ContabilidadPage() {
           >
             Volver al Inicio
           </Link>
-          <button
-            type="button"
-            onClick={() => setRole('admin')}
-            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-xs font-bold text-on-surface hover:bg-surface-container transition-colors"
-          >
-            Cambiar a Administrador (Modo Prueba)
-          </button>
         </div>
       </div>
     );
@@ -380,45 +373,6 @@ export default function ContabilidadPage() {
             ))}
           </div>
         )}
-      </section>
-
-      {/* Simulador de Rol (Para que el Admin pruebe la restricción) */}
-      <section className="bg-surface-container-low p-4 rounded-2xl border border-surface-container-high flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <span className="text-xs uppercase tracking-wider text-secondary font-bold block">
-            Control de Permisos & Prueba de Roles
-          </span>
-          <p className="text-xs text-on-surface-variant mt-0.5">
-            Actualmente estás navegando con rol <strong>{role.toUpperCase()}</strong>. Puedes cambiar de rol para comprobar que las terapeutas o recepción no tienen acceso a esta pantalla.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setRole('admin')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-              role === 'admin' ? 'bg-primary text-white border-primary shadow-xs' : 'bg-surface-container-lowest text-on-surface border-surface-container-high'
-            }`}
-          >
-            Admin
-          </button>
-          <button
-            onClick={() => setRole('recepcion')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-              role === 'recepcion' ? 'bg-primary text-white border-primary shadow-xs' : 'bg-surface-container-lowest text-on-surface border-surface-container-high'
-            }`}
-          >
-            Recepción
-          </button>
-          <button
-            onClick={() => setRole('terapeuta')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
-              role === 'terapeuta' ? 'bg-primary text-white border-primary shadow-xs' : 'bg-surface-container-lowest text-on-surface border-surface-container-high'
-            }`}
-          >
-            Terapeuta
-          </button>
-        </div>
       </section>
 
       {/* Modal Registrar Gasto */}
