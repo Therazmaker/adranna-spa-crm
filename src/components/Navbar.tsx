@@ -1,9 +1,10 @@
 'use client';
 
 import BrandLogo from '@/components/BrandLogo';
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { dbService } from '@/lib/dbService';
 
 interface NavbarProps {
   title?: string;
@@ -12,6 +13,64 @@ interface NavbarProps {
 
 export default function Navbar({ title, showBack = false }: NavbarProps) {
   const { user, role, isAdmin, signOut } = useAuth();
+
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncedMessage, setSyncedMessage] = useState<string | null>(null);
+
+  const refreshQueueCount = useCallback(() => {
+    setPendingCount(dbService.getPendingSyncCount());
+  }, []);
+
+  const triggerSync = useCallback(async () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    const countBefore = dbService.getPendingSyncCount();
+    if (countBefore === 0) return;
+
+    setIsSyncing(true);
+    const { synced, remaining } = await dbService.syncPendingQueue();
+    setIsSyncing(false);
+    setPendingCount(remaining);
+
+    if (synced > 0 && remaining === 0) {
+      setSyncedMessage(`Sincronizado (${synced})`);
+      setTimeout(() => setSyncedMessage(null), 3500);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsOnline(navigator.onLine !== false);
+    refreshQueueCount();
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      triggerSync();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      refreshQueueCount();
+    };
+    const handleSyncChange = () => {
+      refreshQueueCount();
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('adranna-sync-change', handleSyncChange);
+
+    // Si inicia online y quedaron pendientes de una sesión previa, sincronizar
+    if (navigator.onLine !== false && dbService.getPendingSyncCount() > 0) {
+      triggerSync();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('adranna-sync-change', handleSyncChange);
+    };
+  }, [refreshQueueCount, triggerSync]);
 
   const displayName = user?.user_metadata?.full_name || user?.email || 'Usuario';
   const initials = displayName
@@ -87,6 +146,35 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
         )}
 
         <div className="flex items-center gap-2">
+          {/* Estado de Conexión / Cola Offline */}
+          {!isOnline ? (
+            <span
+              title="Sin conexión a internet. Todos los cambios se están guardando en este dispositivo y se subirán al volver la señal."
+              className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs"
+            >
+              <span className="material-symbols-outlined text-[14px]">cloud_off</span>
+              <span>Offline{pendingCount > 0 ? ` (${pendingCount})` : ''}</span>
+            </span>
+          ) : pendingCount > 0 ? (
+            <button
+              type="button"
+              onClick={triggerSync}
+              disabled={isSyncing}
+              title="Hay cambios guardados localmente pendientes de subir a Supabase. Haz clic para sincronizar ahora."
+              className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition-colors shadow-2xs"
+            >
+              <span className={`material-symbols-outlined text-[14px] ${isSyncing ? 'animate-spin' : ''}`}>
+                sync
+              </span>
+              <span>{isSyncing ? 'Subiendo...' : `${pendingCount} pend.`}</span>
+            </button>
+          ) : syncedMessage ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+              <span className="material-symbols-outlined text-[14px]">cloud_done</span>
+              <span>{syncedMessage}</span>
+            </span>
+          ) : null}
+
           {isAdmin && (
             <Link
               href="/usuarios"
@@ -125,6 +213,19 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
           </div>
         </div>
       </div>
+
+      {/* Cinta de aviso cuando no hay internet */}
+      {!isOnline && (
+        <div className="bg-amber-100/95 border-t border-amber-300 px-3 py-1 text-center text-[11px] font-semibold text-amber-950 flex items-center justify-center gap-1.5">
+          <span className="material-symbols-outlined text-[14px]">wifi_off</span>
+          <span>
+            Sin internet — Puedes seguir trabajando normal.{' '}
+            {pendingCount > 0
+              ? `${pendingCount} cambio${pendingCount !== 1 ? 's' : ''} guardado${pendingCount !== 1 ? 's' : ''} en cola para subir cuando vuelva la conexión.`
+              : 'Los cambios se guardarán en este dispositivo.'}
+          </span>
+        </div>
+      )}
     </header>
   );
 }
