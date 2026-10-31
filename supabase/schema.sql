@@ -1,5 +1,7 @@
 -- ==============================================================================
--- ADRANNA SPA & CLÍNICA CRM - ESQUEMA DE BASE DE DATOS SUPABASE (POSTGRESQL)
+-- ADRANNA SPA & CLÍNICA CRM - ESQUEMA COMPLETO SUPABASE (POSTGRESQL)
+-- Puedes pegar y ejecutar todo este bloque en Supabase -> SQL Editor -> New Query
+-- Es 100% seguro ejecutarlo aunque ya tengas tablas creadas (usa IF NOT EXISTS)
 -- ==============================================================================
 
 -- 1. TABLA DE PACIENTES / CLIENTES
@@ -8,11 +10,11 @@ CREATE TABLE IF NOT EXISTS public.clients (
   name TEXT NOT NULL,
   phone TEXT,
   email TEXT,
-  birthdate DATE,
+  birthdate TEXT,
   avatar_url TEXT,
   tags TEXT[] DEFAULT '{}',
-  total_visits INTEGER DEFAULT 0,
-  last_visit DATE,
+  total_visits INTEGER DEFAULT 1,
+  last_visit TEXT,
   notes TEXT,
   has_medical_alert BOOLEAN DEFAULT FALSE,
   medical_alert_description TEXT,
@@ -28,14 +30,14 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   client_phone TEXT,
   professional_name TEXT NOT NULL,
   professional_role TEXT,
-  discipline TEXT CHECK (discipline IN ('podologia', 'masaje')),
+  discipline TEXT DEFAULT 'podologia',
   cabin_name TEXT NOT NULL,
   service_name TEXT NOT NULL,
   duration_minutes INTEGER DEFAULT 45,
-  price NUMERIC(10,2) NOT NULL,
-  status TEXT DEFAULT 'confirmado' CHECK (status IN ('confirmado', 'en_curso', 'completado', 'cancelado')),
-  appointment_date DATE NOT NULL,
-  appointment_time TIME NOT NULL,
+  price NUMERIC(10,2) NOT NULL DEFAULT 0,
+  status TEXT DEFAULT 'confirmado',
+  appointment_date TEXT NOT NULL,
+  appointment_time TEXT NOT NULL,
   has_medical_alert BOOLEAN DEFAULT FALSE,
   medical_alert_text TEXT,
   has_pending_consent BOOLEAN DEFAULT FALSE,
@@ -46,8 +48,8 @@ CREATE TABLE IF NOT EXISTS public.appointments (
 -- 3. TABLA DE EXPEDIENTES CLÍNICOS DE PODOLOGÍA
 CREATE TABLE IF NOT EXISTS public.podology_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE,
-  exp_number TEXT UNIQUE NOT NULL,
+  client_id UUID UNIQUE REFERENCES public.clients(id) ON DELETE CASCADE,
+  exp_number TEXT,
   diabetes_mellitus BOOLEAN DEFAULT FALSE,
   diabetes_type TEXT,
   hypertension BOOLEAN DEFAULT FALSE,
@@ -56,44 +58,54 @@ CREATE TABLE IF NOT EXISTS public.podology_records (
   iodine_allergy BOOLEAN DEFAULT FALSE,
   current_medications TEXT[] DEFAULT '{}',
   consultation_reason TEXT,
-  findings JSONB DEFAULT '[]'::jsonb, -- Array de hallazgos anatómicos (coordenadas, severidad, tipo)
+  findings JSONB DEFAULT '[]'::jsonb,
   applied_treatment TEXT,
   autoclave_cycle_number TEXT,
   is_sterilization_validated BOOLEAN DEFAULT TRUE,
-  photos JSONB DEFAULT '[]'::jsonb, -- Fotos comparativas antes / después
-  evolution_history JSONB DEFAULT '[]'::jsonb, -- Línea de tiempo evolutiva visita por visita
-  informed_consent JSONB DEFAULT '{}'::jsonb, -- Firma biométrica, hash SHA-256, sellado de tiempo
-  audit JSONB DEFAULT '{}'::jsonb, -- Profesional responsable, cédula, última edición
+  photos JSONB DEFAULT '[]'::jsonb,
+  evolution_history JSONB DEFAULT '[]'::jsonb,
+  informed_consent JSONB DEFAULT '{}'::jsonb,
+  audit JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Asegurar índice único en client_id para que el guardado y sincronización (upsert) funcione siempre
+CREATE UNIQUE INDEX IF NOT EXISTS idx_podology_records_client_id ON public.podology_records(client_id);
 
 -- 4. TABLA DE FICHAS DE MASOTERAPIA & BIENESTAR
 CREATE TABLE IF NOT EXISTS public.massage_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id UUID REFERENCES public.clients(id) ON DELETE CASCADE,
-  massage_type TEXT NOT NULL,
-  preferred_pressure TEXT DEFAULT 'Firme' CHECK (preferred_pressure IN ('Suave', 'Media', 'Firme', 'Tejido Profundo')),
-  tension_zones TEXT[] DEFAULT '{}', -- ['cervical', 'trapecio', 'lumbar', etc.]
+  client_id UUID UNIQUE REFERENCES public.clients(id) ON DELETE CASCADE,
+  massage_type TEXT NOT NULL DEFAULT 'Masaje Terapéutico',
+  preferred_pressure TEXT DEFAULT 'Media',
+  tension_zones TEXT[] DEFAULT '{}',
   contraindications TEXT[] DEFAULT '{}',
   aromatherapy_oil TEXT,
   session_notes TEXT,
   duration_minutes INTEGER DEFAULT 60,
+  last_session_date TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. TABLA DE SERVICIOS Y PAQUETES
+ALTER TABLE public.massage_records ADD COLUMN IF NOT EXISTS last_session_date TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_massage_records_client_id ON public.massage_records(client_id);
+
+-- 5. TABLA DE SERVICIOS Y TRATAMIENTOS
 CREATE TABLE IF NOT EXISTS public.services (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
-  category TEXT CHECK (category IN ('podologia', 'masaje', 'paquete')),
+  category TEXT DEFAULT 'podologia',
   duration_minutes INTEGER DEFAULT 45,
-  price NUMERIC(10,2) NOT NULL,
+  price NUMERIC(10,2) NOT NULL DEFAULT 0,
   description TEXT,
   sessions_included INTEGER DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Quitar restricción antigua si existía para permitir 'manicura' además de 'podologia' y 'masaje'
+ALTER TABLE public.services DROP CONSTRAINT IF EXISTS services_category_check;
 
 -- 6. TABLA DE PROFESIONALES / EQUIPO
 CREATE TABLE IF NOT EXISTS public.professionals (
@@ -107,7 +119,19 @@ CREATE TABLE IF NOT EXISTS public.professionals (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. TABLA DE AUDITORÍA (CUMPLIMIENTO DE PROTECCIÓN DE DATOS DE SALUD)
+-- 7. TABLA DE GASTOS / EGRESOS (MÓDULO DE CONTABILIDAD)
+CREATE TABLE IF NOT EXISTS public.expenses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  description TEXT NOT NULL,
+  amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+  category TEXT NOT NULL DEFAULT 'insumos',
+  date TEXT NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'efectivo',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. TABLA DE AUDITORÍA
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID,
@@ -120,7 +144,7 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
 );
 
 -- ==============================================================================
--- ACTIVACIÓN DE ROW LEVEL SECURITY (RLS)
+-- ACTIVACIÓN DE ROW LEVEL SECURITY (RLS) Y POLÍTICAS DE ACCESO
 -- ==============================================================================
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
@@ -128,9 +152,9 @@ ALTER TABLE public.podology_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.massage_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.professionals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Políticas de Acceso (Permiten lectura y escritura para usuarios del sistema)
 DROP POLICY IF EXISTS "Acceso total clients" ON public.clients;
 CREATE POLICY "Acceso total clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
 
@@ -148,3 +172,9 @@ CREATE POLICY "Acceso total services" ON public.services FOR ALL USING (true) WI
 
 DROP POLICY IF EXISTS "Acceso total professionals" ON public.professionals;
 CREATE POLICY "Acceso total professionals" ON public.professionals FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Acceso total expenses" ON public.expenses;
+CREATE POLICY "Acceso total expenses" ON public.expenses FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Acceso total audit_logs" ON public.audit_logs;
+CREATE POLICY "Acceso total audit_logs" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);
