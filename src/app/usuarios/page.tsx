@@ -60,18 +60,30 @@ export default function UsuariosPage() {
 
   const api = useCallback(
     async (method: string, body?: unknown, query = '') => {
-      const res = await fetch(`/api/admin/users${query}`, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token ?? ''}`,
-        },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-      const data = await res.json().catch(() => ({}));
-      return { ok: res.ok, status: res.status, data };
+      const call = async (token: string) => {
+        const res = await fetch(`/api/admin/users${query}`, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        const data = await res.json().catch(() => ({}));
+        return { ok: res.ok, status: res.status, data };
+      };
+
+      // Token siempre fresco (el de React puede estar vencido)
+      const { data: s } = await supabase.auth.getSession();
+      let result = await call(s.session?.access_token ?? '');
+
+      if (result.status === 401) {
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (refreshed.session) result = await call(refreshed.session.access_token);
+      }
+      return result;
     },
-    [session?.access_token]
+    []
   );
 
   const load = useCallback(async () => {
