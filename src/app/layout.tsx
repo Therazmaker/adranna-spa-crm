@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   title: 'Adranna Spa CRM Clínico',
   description: 'CRM Clínico especializado en Podología y Terapias de Masaje con Ficha y Agenda',
   manifest: '/manifest.json',
-  icons: { icon: '/brand/logo.jpg', apple: '/brand/logo.jpg' },
+  icons: { icon: '/brand/logo.png', apple: '/brand/logo.png' },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

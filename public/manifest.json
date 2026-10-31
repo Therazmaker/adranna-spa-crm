@@ -7,5 +7,5 @@
   "background_color": "#FBF6EC",
   "theme_color": "#6F3612",
   "orientation": "portrait-primary",
-  "icons": [ { "src": "/brand/logo.jpg", "sizes": "1024x1024", "type": "image/jpeg", "purpose": "any" } ]
+  "icons": [ { "src": "/brand/logo.png", "sizes": "978x831", "type": "image/png", "purpose": "any" } ]
 }
