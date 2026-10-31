@@ -12,7 +12,6 @@ interface AuthContextType {
   isAdmin: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null; message?: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -23,7 +22,6 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   isLoading: true,
   signIn: async () => ({ error: null }),
-  signUp: async () => ({ error: null }),
   signOut: async () => {},
 });
 
@@ -104,48 +102,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (
-    email: string,
-    password: string,
-    fullName: string
-  ): Promise<{ error: string | null; message?: string }> => {
-    if (!isSupabaseConfigured()) {
-      const mockUser = {
-        id: `usr-${Date.now()}`,
-        email,
-        app_metadata: { role: 'admin' },
-        user_metadata: { full_name: fullName },
-      } as unknown as User;
-      setUser(mockUser);
-      localStorage.setItem('adranna_auth_user', JSON.stringify(mockUser));
-      return { error: null };
-    }
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: fullName } },
-      });
-
-      if (error) return { error: error.message };
-
-      if (data.user && !data.session) {
-        return {
-          error: null,
-          message: 'Usuario registrado. Inicia sesión con tus credenciales.',
-        };
-      }
-
-      setUser(data.user);
-      setSession(data.session);
-      return { error: null };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al registrar usuario';
-      return { error: message };
-    }
-  };
-
   const signOut = async () => {
     if (isSupabaseConfigured()) {
       await supabase.auth.signOut();
@@ -162,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, role, isAdmin, isLoading, signIn, signUp, signOut }}
+      value={{ user, session, role, isAdmin, isLoading, signIn, signOut }}
     >
       {children}
     </AuthContext.Provider>
