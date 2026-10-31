@@ -1,5 +1,6 @@
 'use client';
 
+import BrandLogo from '@/components/BrandLogo';
 import React from 'react';
 import Navbar from '@/components/Navbar';
 import BottomNav from '@/components/BottomNav';
@@ -13,11 +14,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center gap-4 bg-surface">
-        <div className="w-14 h-14 rounded-2xl bg-primary-container/10 border border-primary-container/20 flex items-center justify-center text-primary animate-pulse">
-          <span className="material-symbols-outlined text-[32px]">spa</span>
+        <div className="animate-pulse">
+          <BrandLogo variant="full" size={180} />
         </div>
         <div className="text-center space-y-1">
-          <span className="font-serif text-2xl font-bold text-primary block">Adranna Spa</span>
           <span className="text-xs text-on-surface-variant">Verificando sesión clínica...</span>
         </div>
         <span className="material-symbols-outlined text-primary text-[28px] animate-spin">sync</span>

@@ -1,5 +1,6 @@
 'use client';
 
+import BrandLogo from '@/components/BrandLogo';
 import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -44,6 +45,7 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
           ) : null}
 
           <Link href="/" className="flex items-center gap-space-xs">
+            <BrandLogo variant="emblem" size={44} />
             <span className="font-serif text-2xl font-bold text-primary tracking-tight">
               Adranna
             </span>

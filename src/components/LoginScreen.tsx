@@ -1,5 +1,6 @@
 'use client';
 
+import BrandLogo from '@/components/BrandLogo';
 import React, { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -52,15 +53,12 @@ export default function LoginScreen() {
       <div className="w-full max-w-md bg-surface-container-lowest rounded-3xl p-6 sm:p-8 shadow-xl border border-surface-container-high/80 relative z-10 space-y-6">
         {/* Cabecera / Identidad de Marca */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary-container/10 border border-primary-container/20 text-primary shadow-xs mb-1">
-            <span className="material-symbols-outlined text-[32px]">spa</span>
+          <div className="flex justify-center -mt-2">
+            <BrandLogo variant="full" size={200} />
           </div>
           <div>
-            <span className="font-serif text-3xl font-bold text-primary tracking-tight block">
-              Adranna Spa
-            </span>
             <span className="text-xs uppercase tracking-widest text-secondary font-bold font-sans">
-              Clínica Podológica & Bienestar
+              Podología & Bienestar
             </span>
           </div>
           <p className="text-xs text-on-surface-variant max-w-xs mx-auto pt-1">

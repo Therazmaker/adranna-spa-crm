@@ -131,14 +131,14 @@ export default function AnatomicalFootMap({
               <path
                 d="M100 20 C75 22 55 45 52 75 C48 115 58 160 62 195 C64 212 75 225 90 225 C105 225 115 212 118 195 C122 160 132 115 128 75 C125 45 115 20 100 20 Z"
                 fill="#F3F0EC"
-                stroke="#0F4C5C"
+                stroke="#6F3612"
                 strokeWidth="2.5"
               />
-              <ellipse cx="62" cy="38" rx="8" ry="14" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
-              <ellipse cx="78" cy="28" rx="6.5" ry="11" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
-              <ellipse cx="90" cy="22" rx="6" ry="10" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
-              <ellipse cx="102" cy="18" rx="5.5" ry="9" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
-              <ellipse cx="114" cy="16" rx="5" ry="8" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="62" cy="38" rx="8" ry="14" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
+              <ellipse cx="78" cy="28" rx="6.5" ry="11" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
+              <ellipse cx="90" cy="22" rx="6" ry="10" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
+              <ellipse cx="102" cy="18" rx="5.5" ry="9" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
+              <ellipse cx="114" cy="16" rx="5" ry="8" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
             </g>
 
             {/* Pie Derecho */}
@@ -146,22 +146,22 @@ export default function AnatomicalFootMap({
               <path
                 d="M200 20 C215 20 225 45 228 75 C232 115 222 160 218 195 C215 212 205 225 190 225 C175 225 164 212 162 195 C158 160 148 115 152 75 C155 45 175 22 200 20 Z"
                 fill="#F3F0EC"
-                stroke="#0F4C5C"
+                stroke="#6F3612"
                 strokeWidth="2.5"
               />
-              <ellipse cx="186" cy="16" rx="5" ry="8" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
-              <ellipse cx="198" cy="18" rx="5.5" ry="9" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
-              <ellipse cx="210" cy="22" rx="6" ry="10" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
-              <ellipse cx="222" cy="28" rx="6.5" ry="11" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
-              <ellipse cx="238" cy="38" rx="8" ry="14" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="186" cy="16" rx="5" ry="8" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
+              <ellipse cx="198" cy="18" rx="5.5" ry="9" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
+              <ellipse cx="210" cy="22" rx="6" ry="10" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
+              <ellipse cx="222" cy="28" rx="6.5" ry="11" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
+              <ellipse cx="238" cy="38" rx="8" ry="14" fill="#F3F0EC" stroke="#6F3612" strokeWidth="1.5" />
             </g>
 
             {activeView === 'plantar' ? (
-              <text x="150" y="130" textAnchor="middle" fill="#0F4C5C" fontSize="12" fontWeight="bold" opacity="0.4">
+              <text x="150" y="130" textAnchor="middle" fill="#6F3612" fontSize="12" fontWeight="bold" opacity="0.4">
                 VISTA PLANTAR
               </text>
             ) : (
-              <text x="150" y="130" textAnchor="middle" fill="#0F4C5C" fontSize="12" fontWeight="bold" opacity="0.4">
+              <text x="150" y="130" textAnchor="middle" fill="#6F3612" fontSize="12" fontWeight="bold" opacity="0.4">
                 VISTA DORSAL
               </text>
             )}
