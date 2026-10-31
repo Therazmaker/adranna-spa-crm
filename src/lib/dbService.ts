@@ -5,9 +5,96 @@ import {
   INITIAL_SOFIA_PODOLOGY_RECORD,
   INITIAL_CAMILA_MASSAGE_RECORD,
 } from './mockData';
-import { Client, Appointment, PodologyRecord, MassageRecord, Professional, ServicePackage } from '@/types/database';
+import { Client, Appointment, PodologyRecord, MassageRecord, Professional, ServicePackage, Expense } from '@/types/database';
 
 export const dbService = {
+  // ─── GASTOS Y CONTABILIDAD ──────────────────────────────────────────────────
+
+  async getExpenses(): Promise<Expense[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('expenses')
+          .select('*')
+          .order('date', { ascending: false });
+        if (!error && data && data.length > 0) {
+          return data.map((e) => ({
+            id: e.id,
+            description: e.description,
+            amount: Number(e.amount) || 0,
+            category: e.category || 'insumos',
+            date: e.date,
+            paymentMethod: e.payment_method || 'efectivo',
+            notes: e.notes,
+            createdAt: e.created_at,
+          }));
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('adranna_expenses');
+      if (cached) {
+        try { return JSON.parse(cached); } catch { /* ignore */ }
+      }
+    }
+    return [];
+  },
+
+  async createExpense(exp: Omit<Expense, 'id'>): Promise<Expense> {
+    const fallbackId = `exp-${Date.now()}`;
+    const newExp: Expense = { id: fallbackId, ...exp, createdAt: new Date().toISOString() };
+
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('expenses')
+          .insert({
+            description: exp.description,
+            amount: exp.amount,
+            category: exp.category,
+            date: exp.date,
+            payment_method: exp.paymentMethod,
+            notes: exp.notes || null,
+          })
+          .select()
+          .single();
+        if (!error && data) {
+          newExp.id = data.id;
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const current = await this.getExpenses();
+      const updated = [newExp, ...current];
+      localStorage.setItem('adranna_expenses', JSON.stringify(updated));
+    }
+
+    return newExp;
+  },
+
+  async deleteExpense(id: string): Promise<boolean> {
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('expenses').delete().eq('id', id);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const current = await this.getExpenses();
+      const updated = current.filter((e) => e.id !== id);
+      localStorage.setItem('adranna_expenses', JSON.stringify(updated));
+    }
+    return true;
+  },
+
   // ─── CLIENTES ────────────────────────────────────────────────────────────────
 
   async getClients(): Promise<Client[]> {

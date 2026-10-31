@@ -10,7 +10,7 @@ interface NavbarProps {
 }
 
 export default function Navbar({ title, showBack = false }: NavbarProps) {
-  const { user, signOut } = useAuth();
+  const { user, role, isAdmin, signOut } = useAuth();
 
   const displayName = user?.user_metadata?.full_name || user?.email || 'Usuario';
   const initials = displayName
@@ -20,6 +20,14 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
     .slice(0, 2)
     .join('')
     .toUpperCase();
+
+  const roleLabels: Record<string, { label: string; color: string }> = {
+    admin: { label: 'Admin', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+    recepcion: { label: 'Recepción', color: 'bg-sky-100 text-sky-800 border-sky-300' },
+    terapeuta: { label: 'Terapeuta', color: 'bg-amber-100 text-amber-800 border-amber-300' },
+  };
+
+  const currentRole = roleLabels[role] || roleLabels.admin;
 
   return (
     <header className="fixed top-0 w-full z-50 pt-safe bg-surface/90 backdrop-blur-xl border-b border-surface-container-high/60 shadow-xs">
@@ -61,6 +69,12 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
             <Link href="/equipo" className="px-3 py-1.5 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors">
               Equipo
             </Link>
+            {isAdmin && (
+              <Link href="/contabilidad" className="px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors flex items-center gap-1">
+                <span className="material-symbols-outlined text-[15px]">account_balance_wallet</span>
+                Contabilidad
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -71,10 +85,15 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
         )}
 
         <div className="flex items-center gap-2">
+          {/* Badge de Rol */}
+          <span className={`hidden sm:inline-flex items-center text-[11px] font-bold px-2.5 py-0.5 rounded-full border shadow-2xs ${currentRole.color}`}>
+            {currentRole.label}
+          </span>
+
           {/* Avatar con monograma e identidad real */}
           <div className="relative group flex items-center pl-1">
             <button
-              title={`${displayName} — Cerrar Sesión`}
+              title={`${displayName} (${currentRole.label}) — Cerrar Sesión`}
               onClick={signOut}
               className="flex items-center gap-2 rounded-full hover:bg-surface-container-high/60 px-2 py-1 transition-colors border border-surface-container-high"
               type="button"

@@ -3,17 +3,27 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const { isAdmin } = useAuth();
 
-  const navItems = [
+  const baseNavItems = [
     { label: 'Inicio', path: '/', icon: 'spa' },
     { label: 'Agenda', path: '/agenda', icon: 'calendar_today' },
     { label: 'Clientes', path: '/clientes', icon: 'group' },
     { label: 'Servicios', path: '/servicios', icon: 'medical_services' },
     { label: 'Equipo', path: '/equipo', icon: 'badge' },
   ];
+
+  const navItems = isAdmin
+    ? [
+        ...baseNavItems.slice(0, 4),
+        { label: 'Caja', path: '/contabilidad', icon: 'account_balance_wallet' },
+        baseNavItems[4],
+      ]
+    : baseNavItems;
 
   return (
     <nav className="fixed bottom-0 w-full z-50 pb-safe bg-surface/92 backdrop-blur-xl border-t border-surface-container-high/80 shadow-[0_-2px_12px_rgba(0,0,0,0.04)]">

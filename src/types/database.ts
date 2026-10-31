@@ -1,5 +1,16 @@
 export type UserRole = 'admin' | 'recepcion' | 'terapeuta';
 
+export interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  category: 'insumos' | 'alquiler' | 'servicios' | 'personal' | 'otros';
+  date: string;
+  paymentMethod: 'efectivo' | 'transferencia' | 'tarjeta' | 'yape_plin';
+  notes?: string;
+  createdAt?: string;
+}
+
 export interface Client {
   id: string;
   name: string;
