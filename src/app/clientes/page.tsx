@@ -20,7 +20,28 @@ function avatarColor(id: string) {
   return PALETTE[n];
 }
 
-const TAG_LIST = ['Pie Diabético', 'Podología', 'Masaje', 'VIP Gold', 'Drenaje Linfático', 'Alergia Látex'];
+const DEFAULT_TAGS = ['Pie Diabético', 'Podología', 'Masaje', 'Drenaje Linfático', 'Alergia Látex'];
+
+function getStoredTags(): string[] {
+  if (typeof window === 'undefined') return DEFAULT_TAGS;
+  try {
+    const raw = localStorage.getItem('adranna_client_tags');
+    if (!raw) return DEFAULT_TAGS;
+    const parsed: string[] = JSON.parse(raw);
+    const cleaned = parsed.filter(
+      (t) => t && t.trim() !== '' && !t.toLowerCase().includes('vip')
+    );
+    return cleaned.length > 0 ? cleaned : DEFAULT_TAGS;
+  } catch {
+    return DEFAULT_TAGS;
+  }
+}
+
+function saveStoredTags(tags: string[]) {
+  if (typeof window === 'undefined') return;
+  const cleaned = tags.filter((t) => t && t.trim() !== '' && !t.toLowerCase().includes('vip'));
+  localStorage.setItem('adranna_client_tags', JSON.stringify(cleaned));
+}
 
 // ─── Formulario vacío ─────────────────────────────────────────────────────────
 const EMPTY_FORM = {
@@ -41,7 +62,7 @@ function DeleteConfirmDialog({
   isDeleting: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-surface-container-lowest rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-error/20 space-y-4">
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="w-14 h-14 rounded-full bg-error-container/40 flex items-center justify-center">
@@ -86,11 +107,15 @@ function DeleteConfirmDialog({
 // ─── Modal Agregar / Editar ───────────────────────────────────────────────────
 function ClientFormModal({
   initial,
+  availableTags,
+  onAddCustomTag,
   onSave,
   onClose,
   isSaving,
 }: {
   initial?: Client;
+  availableTags: string[];
+  onAddCustomTag: (tag: string) => void;
   onSave: (data: typeof EMPTY_FORM) => void;
   onClose: () => void;
   isSaving: boolean;
@@ -102,15 +127,39 @@ function ClientFormModal({
           phone: initial.phone,
           email: initial.email,
           birthdate: initial.birthdate || '',
-          condition: initial.tags.filter((t) => !['Nuevo Paciente'].includes(t)).join(', '),
+          condition: initial.tags.filter((t) => !['Nuevo Paciente'].includes(t) && !t.toLowerCase().includes('vip')).join(', '),
           isDiabetic: initial.hasMedicalAlert ?? false,
           notes: initial.notes || '',
         }
       : { ...EMPTY_FORM }
   );
 
+  const [newTagInput, setNewTagInput] = useState('');
+  const [showNewTagInput, setShowNewTagInput] = useState(false);
+
   const set = (k: keyof typeof EMPTY_FORM, v: string | boolean) =>
     setForm((prev) => ({ ...prev, [k]: v }));
+
+  const handleAddTagToCondition = (tag: string) => {
+    const current = form.condition
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    if (!current.includes(tag)) {
+      const next = current.length > 0 ? `${form.condition}, ${tag}` : tag;
+      set('condition', next);
+    }
+  };
+
+  const handleCreateCustomTag = (e: React.FormEvent) => {
+    e.preventDefault();
+    const tag = newTagInput.trim();
+    if (!tag) return;
+    onAddCustomTag(tag);
+    handleAddTagToCondition(tag);
+    setNewTagInput('');
+    setShowNewTagInput(false);
+  };
 
   const isEdit = !!initial;
 
@@ -186,7 +235,18 @@ function ClientFormModal({
 
           {/* Condición / Tags */}
           <div>
-            <label className="text-xs font-bold text-on-surface-variant block mb-1">Condición / Etiqueta Clínica</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-on-surface-variant">Condición / Etiquetas Clínicas</label>
+              <button
+                type="button"
+                onClick={() => setShowNewTagInput((prev) => !prev)}
+                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-0.5"
+              >
+                <span className="material-symbols-outlined text-[14px]">add_circle</span>
+                <span>{showNewTagInput ? 'Cerrar' : '+ Crear Etiqueta'}</span>
+              </button>
+            </div>
+
             <input
               type="text"
               placeholder="Ej. Onicocriptosis, Alergia al látex..."
@@ -194,18 +254,57 @@ function ClientFormModal({
               onChange={(e) => set('condition', e.target.value)}
               className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
             />
-            {/* Tags rápidos */}
-            <div className="flex flex-wrap gap-1.5 mt-2">
-              {TAG_LIST.map((tag) => (
+
+            {/* Input rápido para crear nueva etiqueta */}
+            {showNewTagInput && (
+              <div className="mt-2 p-2 rounded-xl bg-surface-container border border-surface-container-high flex items-center gap-1.5">
+                <input
+                  type="text"
+                  placeholder="Nueva etiqueta (ej. Manicura)..."
+                  value={newTagInput}
+                  onChange={(e) => setNewTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleCreateCustomTag(e);
+                    }
+                  }}
+                  className="flex-1 bg-surface-container-lowest border border-surface-container-high rounded-lg px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                />
                 <button
-                  key={tag}
                   type="button"
-                  onClick={() => set('condition', form.condition ? `${form.condition}, ${tag}` : tag)}
-                  className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-surface-container-high text-on-surface-variant hover:bg-primary-container/20 hover:text-primary transition-colors"
+                  onClick={handleCreateCustomTag}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-white text-xs font-bold hover:bg-primary-container transition-colors"
                 >
-                  + {tag}
+                  Guardar
                 </button>
-              ))}
+              </div>
+            )}
+
+            {/* Lista de tags interactivos */}
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {availableTags.map((tag) => {
+                const isSelected = form.condition
+                  .split(',')
+                  .map((t) => t.trim().toLowerCase())
+                  .includes(tag.toLowerCase());
+
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => handleAddTagToCondition(tag)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all flex items-center gap-1 border ${
+                      isSelected
+                        ? 'bg-primary text-white border-primary shadow-2xs'
+                        : 'bg-surface-container-high text-on-surface-variant hover:bg-primary-container/20 hover:text-primary border-transparent'
+                    }`}
+                  >
+                    <span>{isSelected ? '✓' : '+'}</span>
+                    <span>{tag}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -241,7 +340,7 @@ function ClientFormModal({
             {isSaving ? (
               <><span className="material-symbols-outlined text-[16px] animate-spin">sync</span><span>Guardando...</span></>
             ) : (
-              <><span className="material-symbols-outlined text-[16px]">{isEdit ? 'save' : 'person_add'}</span><span>{isEdit ? 'Guardar Cambios' : 'Crear Ficha en Supabase'}</span></>
+              <><span className="material-symbols-outlined text-[16px]">{isEdit ? 'save' : 'person_add'}</span><span>{isEdit ? 'Guardar Cambios' : 'Crear Ficha'}</span></>
             )}
           </button>
         </form>
@@ -253,9 +352,14 @@ function ClientFormModal({
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function ClientesPage() {
   const [clients, setClients] = useState<Client[]>([]);
+  const [customTags, setCustomTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState('all');
+
+  // Inline creación de etiqueta en la barra de filtros
+  const [isAddingTagFilter, setIsAddingTagFilter] = useState(false);
+  const [filterNewTagInput, setFilterNewTagInput] = useState('');
 
   // Modal state
   const [showForm, setShowForm] = useState(false);
@@ -266,16 +370,51 @@ export default function ClientesPage() {
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const tagsList = ['all', 'Pie Diabético', 'Podología', 'Masaje', 'VIP Gold'];
-
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     let mounted = true;
+    setCustomTags(getStoredTags());
+
     dbService.getClients().then((data) => {
-      if (mounted) { setClients(data); setIsLoading(false); }
+      if (mounted) {
+        // Limpiar cualquier residuo de VIP de los clientes cargados
+        const sanitized = data.map((c) => ({
+          ...c,
+          tags: c.tags.filter((t) => t && !t.toLowerCase().includes('vip')),
+        }));
+        setClients(sanitized);
+        setIsLoading(false);
+      }
     });
     return () => { mounted = false; };
   }, []);
+
+  // Agregar tag personalizada
+  const handleAddCustomTag = (newTag: string) => {
+    const trimmed = newTag.trim();
+    if (!trimmed || trimmed.toLowerCase().includes('vip')) return;
+
+    if (!customTags.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
+      const updated = [...customTags, trimmed];
+      setCustomTags(updated);
+      saveStoredTags(updated);
+    }
+  };
+
+  // Guardar etiqueta desde el filtro superior
+  const handleSaveFilterNewTag = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!filterNewTagInput.trim()) return;
+    handleAddCustomTag(filterNewTagInput.trim());
+    setActiveTag(filterNewTagInput.trim());
+    setFilterNewTagInput('');
+    setIsAddingTagFilter(false);
+  };
+
+  // Calcular lista dinámica de pestañas de filtro (Todos + customTags + tags de clientes existentes)
+  const clientTags = clients.flatMap((c) => c.tags).filter((t) => t && !t.toLowerCase().includes('vip') && t !== 'Nuevo Paciente');
+  const allAvailableTags = Array.from(new Set([...customTags, ...clientTags]));
+  const tagsList = ['all', ...allAvailableTags];
 
   // ── Filtered ──────────────────────────────────────────────────────────────
   const filtered = clients.filter((c) => {
@@ -285,7 +424,7 @@ export default function ClientesPage() {
       (c.phone || '').includes(q) ||
       (c.email || '').toLowerCase().includes(q) ||
       c.tags.some((t) => t.toLowerCase().includes(q));
-    const matchTag = activeTag === 'all' || c.tags.includes(activeTag);
+    const matchTag = activeTag === 'all' || c.tags.some((t) => t.toLowerCase() === activeTag.toLowerCase());
     return matchSearch && matchTag;
   });
 
@@ -296,10 +435,14 @@ export default function ClientesPage() {
 
     const tags: string[] = [];
     if (form.isDiabetic) tags.push('Pie Diabético');
-    form.condition.split(',').map((s) => s.trim()).filter(Boolean).forEach((t) => {
-      if (!tags.includes(t)) tags.push(t);
-    });
-    if (tags.length === 0) tags.push('Nuevo Paciente');
+    form.condition
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => Boolean(s) && !s.toLowerCase().includes('vip'))
+      .forEach((t) => {
+        if (!tags.includes(t)) tags.push(t);
+      });
+    if (tags.length === 0) tags.push('Paciente');
 
     const payload = {
       name: form.name.trim(),
@@ -360,7 +503,7 @@ export default function ClientesPage() {
           <h1 className="font-serif text-2xl font-bold text-primary tracking-tight">Directorio de Pacientes</h1>
           <p className="text-xs text-on-surface-variant mt-0.5">
             {isLoading
-              ? 'Conectando con Supabase...'
+              ? 'Conectando con base de datos...'
               : `${clients.length} ficha${clients.length !== 1 ? 's' : ''} clínica${clients.length !== 1 ? 's' : ''} registrada${clients.length !== 1 ? 's' : ''}`}
           </p>
         </div>
@@ -393,7 +536,7 @@ export default function ClientesPage() {
         )}
       </div>
 
-      {/* Tags filtro */}
+      {/* Tags filtro dinámicos con creación de etiqueta propia */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-gutter-mobile px-gutter-mobile">
         {tagsList.map((tag) => (
           <button
@@ -408,13 +551,50 @@ export default function ClientesPage() {
             {tag === 'all' ? 'Todos' : tag}
           </button>
         ))}
+
+        {/* Botón para crear nueva etiqueta de filtro */}
+        {isAddingTagFilter ? (
+          <form onSubmit={handleSaveFilterNewTag} className="flex items-center gap-1 bg-surface-container-lowest border border-primary p-0.5 rounded-full">
+            <input
+              type="text"
+              autoFocus
+              placeholder="Nueva etiqueta..."
+              value={filterNewTagInput}
+              onChange={(e) => setFilterNewTagInput(e.target.value)}
+              className="bg-transparent text-xs px-2 py-0.5 w-28 text-on-surface focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary-container"
+              title="Guardar etiqueta"
+            >
+              <span className="material-symbols-outlined text-[14px]">check</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setIsAddingTagFilter(false); setFilterNewTagInput(''); }}
+              className="w-6 h-6 rounded-full text-outline hover:text-error flex items-center justify-center"
+              title="Cancelar"
+            >
+              <span className="material-symbols-outlined text-[14px]">close</span>
+            </button>
+          </form>
+        ) : (
+          <button
+            onClick={() => setIsAddingTagFilter(true)}
+            className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border border-dashed border-primary/40 text-primary hover:bg-primary-container/10 transition-colors flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-[15px]">add</span>
+            <span>Nueva Etiqueta</span>
+          </button>
+        )}
       </div>
 
       {/* Lista */}
       {isLoading ? (
         <div className="py-12 flex flex-col items-center gap-2 text-on-surface-variant">
           <span className="material-symbols-outlined text-3xl animate-spin text-primary">sync</span>
-          <span className="text-xs font-medium">Cargando pacientes desde Supabase...</span>
+          <span className="text-xs font-medium">Cargando pacientes...</span>
         </div>
       ) : filtered.length === 0 ? (
         <div className="py-16 flex flex-col items-center gap-3 text-on-surface-variant">
@@ -499,22 +679,30 @@ export default function ClientesPage() {
                 </p>
               )}
 
-              {/* Tags */}
+              {/* Tags personalizadas del paciente */}
               <div className="flex flex-wrap gap-1.5">
-                {client.tags.map((t) => (
-                  <span
-                    key={t}
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                      t.includes('Diabético') || t.includes('Látex')
-                        ? 'bg-error-container/50 text-error'
-                        : t.includes('VIP')
-                        ? 'bg-secondary-fixed text-on-secondary-fixed'
-                        : 'bg-surface-container-low text-on-surface-variant'
-                    }`}
-                  >
-                    {t}
-                  </span>
-                ))}
+                {client.tags.map((t) => {
+                  const isAlert = t.includes('Diabético') || t.includes('Látex') || t.toLowerCase().includes('alergia');
+                  const isPodo = t.toLowerCase().includes('podo') || t.toLowerCase().includes('pie');
+                  const isMassage = t.toLowerCase().includes('masaje') || t.toLowerCase().includes('terapia');
+
+                  return (
+                    <span
+                      key={t}
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-md border ${
+                        isAlert
+                          ? 'bg-error-container/40 text-error border-error/30'
+                          : isPodo
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : isMassage
+                          ? 'bg-amber-50 text-amber-900 border-amber-200'
+                          : 'bg-primary-container/15 text-primary border-primary/20'
+                      }`}
+                    >
+                      {t}
+                    </span>
+                  );
+                })}
               </div>
 
               {/* Fichas especializadas */}
@@ -543,6 +731,8 @@ export default function ClientesPage() {
       {showForm && (
         <ClientFormModal
           initial={editingClient}
+          availableTags={allAvailableTags}
+          onAddCustomTag={handleAddCustomTag}
           onSave={handleSave}
           onClose={() => { setShowForm(false); setEditingClient(undefined); }}
           isSaving={isSaving}
