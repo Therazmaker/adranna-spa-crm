@@ -6,11 +6,26 @@ import { FootFinding } from '@/types/database';
 interface AnatomicalFootMapProps {
   findings: FootFinding[];
   onAddFinding?: (finding: FootFinding) => void;
+  onUpdateFinding?: (finding: FootFinding) => void;
+  onDeleteFinding?: (id: string) => void;
 }
 
-export default function AnatomicalFootMap({ findings, onAddFinding }: AnatomicalFootMapProps) {
+const CONDITIONS: { label: string; value: FootFinding['condition'] }[] = [
+  { label: 'Hiperqueratosis / Dureza', value: 'hiperqueratosis' },
+  { label: 'Uña encarnada (Onicocriptosis)', value: 'onicocriptosis' },
+  { label: 'Micosis / Hongos', value: 'micosis' },
+  { label: 'Papiloma / Verruga', value: 'verruga' },
+];
+
+export default function AnatomicalFootMap({
+  findings,
+  onAddFinding,
+  onUpdateFinding,
+  onDeleteFinding,
+}: AnatomicalFootMapProps) {
   const [activeView, setActiveView] = useState<'dorsal' | 'plantar'>('dorsal');
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(findings[0]?.id || null);
+  const [editingFinding, setEditingFinding] = useState<FootFinding | null>(null);
 
   const selectedFinding = findings.find((f) => f.id === selectedFindingId);
 
@@ -29,14 +44,30 @@ export default function AnatomicalFootMap({ findings, onAddFinding }: Anatomical
       foot,
       view: activeView,
       condition: 'hiperqueratosis',
-      title: `Nuevo Hallazgo en Pie ${foot === 'derecho' ? 'Derecho' : 'Izquierdo'}`,
+      title: `Hallazgo #${newNumber} (Pie ${foot === 'derecho' ? 'Derecho' : 'Izquierdo'})`,
       severity: 'Seguimiento',
-      description: `Punto localizado en vista ${activeView} (${x}%, ${y}%). Registrar diagnóstico específico.`,
+      description: `Punto localizado en vista ${activeView}. Escribe aquí el diagnóstico...`,
       markerCoords: { x, y },
     };
 
     onAddFinding(newFinding);
     setSelectedFindingId(newFinding.id);
+    // Abrir automáticamente el editor para que el usuario escriba lo que es
+    setEditingFinding(newFinding);
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFinding || !onUpdateFinding) return;
+    onUpdateFinding(editingFinding);
+    setEditingFinding(null);
+  };
+
+  const handleDelete = (id: string) => {
+    if (!confirm('¿Eliminar este marcador de hallazgo?')) return;
+    onDeleteFinding?.(id);
+    if (selectedFindingId === id) setSelectedFindingId(null);
+    if (editingFinding?.id === id) setEditingFinding(null);
   };
 
   return (
@@ -98,70 +129,47 @@ export default function AnatomicalFootMap({ findings, onAddFinding }: Anatomical
             {/* Pie Izquierdo */}
             <g opacity="0.9" className="transition-all hover:opacity-100">
               <path
-                d="M75 30 C65 30 55 45 55 65 C55 90 60 115 62 135 C64 155 60 175 60 195 C60 215 75 225 90 225 C105 225 118 215 118 190 C118 165 112 140 112 110 C112 80 118 55 112 40 C108 28 95 30 75 30 Z"
-                fill={activeView === 'dorsal' ? '#E3E2E0' : '#D8D5D0'}
-                stroke="#C0C8CB"
-                strokeWidth="1.5"
+                d="M100 20 C75 22 55 45 52 75 C48 115 58 160 62 195 C64 212 75 225 90 225 C105 225 115 212 118 195 C122 160 132 115 128 75 C125 45 115 20 100 20 Z"
+                fill="#F3F0EC"
+                stroke="#0F4C5C"
+                strokeWidth="2.5"
               />
-              {/* Dedos izquierdos */}
-              <ellipse cx="65" cy="32" rx="7" ry="11" fill="#C9C7C1" stroke="#A8B0B3" />
-              <ellipse cx="80" cy="24" rx="6" ry="10" fill="#C9C7C1" stroke="#A8B0B3" />
-              <ellipse cx="93" cy="27" rx="5" ry="9" fill="#C9C7C1" stroke="#A8B0B3" />
-              <ellipse cx="104" cy="33" rx="4.5" ry="8" fill="#C9C7C1" stroke="#A8B0B3" />
-              <ellipse cx="113" cy="42" rx="4" ry="7" fill="#C9C7C1" stroke="#A8B0B3" />
-              <text
-                x="85"
-                y="160"
-                fill="#70787C"
-                fontFamily="'Plus Jakarta Sans', sans-serif"
-                fontSize="9"
-                fontWeight="700"
-                letterSpacing="1"
-                textAnchor="middle"
-              >
-                PIE IZQUIERDO
-              </text>
+              <ellipse cx="62" cy="38" rx="8" ry="14" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="78" cy="28" rx="6.5" ry="11" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="90" cy="22" rx="6" ry="10" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="102" cy="18" rx="5.5" ry="9" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="114" cy="16" rx="5" ry="8" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
             </g>
 
             {/* Pie Derecho */}
             <g opacity="0.9" className="transition-all hover:opacity-100">
               <path
-                d="M225 30 C245 30 255 45 255 65 C255 90 250 115 248 135 C246 155 250 175 250 195 C250 215 235 225 220 225 C205 225 192 215 192 190 C192 165 198 140 198 110 C198 80 192 55 198 40 C202 28 215 30 225 30 Z"
-                fill={activeView === 'dorsal' ? '#E3E2E0' : '#D8D5D0'}
-                stroke="#C0C8CB"
-                strokeWidth="1.5"
+                d="M200 20 C215 20 225 45 228 75 C232 115 222 160 218 195 C215 212 205 225 190 225 C175 225 164 212 162 195 C158 160 148 115 152 75 C155 45 175 22 200 20 Z"
+                fill="#F3F0EC"
+                stroke="#0F4C5C"
+                strokeWidth="2.5"
               />
-              {/* Dedos derechos */}
-              <ellipse cx="245" cy="32" rx="7" ry="11" fill="#C9C7C1" stroke="#A8B0B3" />
-              <ellipse cx="230" cy="24" rx="6" ry="10" fill="#C9C7C1" stroke="#A8B0B3" />
-              <ellipse cx="217" cy="27" rx="5" ry="9" fill="#C9C7C1" stroke="#A8B0B3" />
-              <ellipse cx="206" cy="33" rx="4.5" ry="8" fill="#C9C7C1" stroke="#A8B0B3" />
-              <ellipse cx="197" cy="42" rx="4" ry="7" fill="#C9C7C1" stroke="#A8B0B3" />
-              <text
-                x="225"
-                y="160"
-                fill="#70787C"
-                fontFamily="'Plus Jakarta Sans', sans-serif"
-                fontSize="9"
-                fontWeight="700"
-                letterSpacing="1"
-                textAnchor="middle"
-              >
-                PIE DERECHO
-              </text>
+              <ellipse cx="186" cy="16" rx="5" ry="8" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="198" cy="18" rx="5.5" ry="9" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="210" cy="22" rx="6" ry="10" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="222" cy="28" rx="6.5" ry="11" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
+              <ellipse cx="238" cy="38" rx="8" ry="14" fill="#F3F0EC" stroke="#0F4C5C" strokeWidth="1.5" />
             </g>
+
+            {activeView === 'plantar' ? (
+              <text x="150" y="130" textAnchor="middle" fill="#0F4C5C" fontSize="12" fontWeight="bold" opacity="0.4">
+                VISTA PLANTAR
+              </text>
+            ) : (
+              <text x="150" y="130" textAnchor="middle" fill="#0F4C5C" fontSize="12" fontWeight="bold" opacity="0.4">
+                VISTA DORSAL
+              </text>
+            )}
           </svg>
 
-          {/* Interactive Marker Pins */}
+          {/* Marcadores sobre el mapa */}
           {findings.map((f) => {
             const isSelected = f.id === selectedFindingId;
-            const bgClass =
-              f.severity === 'Agudo'
-                ? 'bg-error text-on-error'
-                : f.severity === 'Crónico'
-                ? 'bg-secondary text-on-secondary'
-                : 'bg-primary-container text-on-primary';
-
             return (
               <button
                 key={f.id}
@@ -169,27 +177,27 @@ export default function AnatomicalFootMap({ findings, onAddFinding }: Anatomical
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedFindingId(f.id);
+                  setEditingFinding(f);
                 }}
                 style={{
-                  left: `${f.markerCoords.x}%`,
                   top: `${f.markerCoords.y}%`,
+                  left: `${f.markerCoords.x}%`,
                   transform: 'translate(-50%, -50%)',
                 }}
-                className={`absolute z-20 focus:outline-none transition-transform ${
-                  isSelected ? 'scale-125 ring-4 ring-primary/30 z-30' : 'hover:scale-110'
+                className={`absolute z-10 w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs shadow-md transition-transform hover:scale-125 ${
+                  isSelected
+                    ? 'ring-4 ring-primary-container scale-110 z-20'
+                    : ''
+                } ${
+                  f.severity === 'Agudo'
+                    ? 'bg-error text-white'
+                    : f.severity === 'Crónico'
+                    ? 'bg-secondary text-white'
+                    : 'bg-primary-container text-white'
                 }`}
-                aria-label={`Hallazgo ${f.markerNumber}: ${f.title}`}
+                title={`${f.title} (Clic para editar)`}
               >
-                <span className="relative flex h-7 w-7">
-                  {f.severity === 'Agudo' && (
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-40"></span>
-                  )}
-                  <span
-                    className={`relative inline-flex rounded-full h-7 w-7 ${bgClass} items-center justify-center font-bold text-xs shadow-md border-2 border-surface`}
-                  >
-                    {f.markerNumber}
-                  </span>
-                </span>
+                <span>{f.markerNumber}</span>
               </button>
             );
           })}
@@ -197,99 +205,186 @@ export default function AnatomicalFootMap({ findings, onAddFinding }: Anatomical
 
         <p className="text-xs text-outline font-medium text-center mt-2 flex items-center gap-1">
           <span className="material-symbols-outlined text-[16px]">touch_app</span>
-          Toca cualquier marcador para ver diagnóstico o haz clic en el pie para agregar uno nuevo.
+          Haz clic en cualquier parte del pie para agregar un punto, o toca un marcador para editarlo.
         </p>
       </div>
 
-      {/* Selected Finding Detail Box */}
-      {selectedFinding && (
-        <div className="bg-primary/5 border border-primary/15 rounded-xl p-3.5 space-y-1.5 transition-all">
-          <div className="flex items-center justify-between">
+      {/* Editor del Hallazgo Seleccionado */}
+      {editingFinding && (
+        <form
+          onSubmit={handleSaveEdit}
+          className="bg-primary-container/10 border-2 border-primary/30 rounded-2xl p-4 space-y-3 animate-fadeIn"
+        >
+          <div className="flex items-center justify-between pb-2 border-b border-primary/20">
             <div className="flex items-center gap-2">
-              <span
-                className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center text-white ${
-                  selectedFinding.severity === 'Agudo'
-                    ? 'bg-error'
-                    : selectedFinding.severity === 'Crónico'
-                    ? 'bg-secondary'
-                    : 'bg-primary-container'
-                }`}
-              >
-                {selectedFinding.markerNumber}
+              <span className="w-6 h-6 rounded-full bg-primary text-white font-bold text-xs flex items-center justify-center">
+                {editingFinding.markerNumber}
               </span>
-              <h4 className="font-semibold text-primary text-sm">
-                {selectedFinding.title}
+              <h4 className="font-serif font-bold text-primary text-sm">
+                Editar Diagnóstico del Hallazgo #{editingFinding.markerNumber}
               </h4>
             </div>
-            <span
-              className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                selectedFinding.severity === 'Agudo'
-                  ? 'bg-error-container text-on-error-container'
-                  : selectedFinding.severity === 'Crónico'
-                  ? 'bg-secondary-fixed text-on-secondary-fixed'
-                  : 'bg-surface-container-high text-on-surface-variant'
-              }`}
+            <button
+              type="button"
+              onClick={() => handleDelete(editingFinding.id)}
+              className="px-2.5 py-1 rounded-lg bg-error-container/40 text-error hover:bg-error-container text-xs font-bold flex items-center gap-1 transition-colors"
+              title="Borrar hallazgo"
             >
-              {selectedFinding.severity}
-            </span>
+              <span className="material-symbols-outlined text-[15px]">delete</span>
+              <span>Eliminar</span>
+            </button>
           </div>
-          <p className="text-xs text-on-surface leading-relaxed">
-            {selectedFinding.description}
-          </p>
-          <div className="flex items-center gap-2 text-[11px] text-outline pt-1">
-            <span>Ubicación: Pie {selectedFinding.foot} ({selectedFinding.view})</span>
-            <span>•</span>
-            <span className="capitalize">Condición: {selectedFinding.condition}</span>
-          </div>
-        </div>
-      )}
 
-      {/* Findings List Table */}
-      <div className="space-y-2 pt-1">
-        {findings.map((finding) => (
-          <div
-            key={finding.id}
-            onClick={() => setSelectedFindingId(finding.id)}
-            className={`p-3 rounded-xl flex items-start gap-3 cursor-pointer transition-all border ${
-              finding.id === selectedFindingId
-                ? 'bg-surface-container-low border-primary/30 shadow-xs'
-                : 'bg-surface-container-low/60 border-transparent hover:bg-surface-container-low'
-            }`}
-          >
-            <span
-              className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5 text-white ${
-                finding.severity === 'Agudo'
-                  ? 'bg-error'
-                  : finding.severity === 'Crónico'
-                  ? 'bg-secondary'
-                  : 'bg-primary-container'
-              }`}
-            >
-              {finding.markerNumber}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-1">
-                <h5 className="font-semibold text-sm text-on-surface truncate">
-                  {finding.title}
-                </h5>
-                <span
-                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                    finding.severity === 'Agudo'
-                      ? 'bg-error-container text-on-error-container'
-                      : finding.severity === 'Crónico'
-                      ? 'bg-secondary-fixed text-on-secondary-fixed'
-                      : 'bg-surface-container-high text-on-surface-variant'
-                  }`}
-                >
-                  {finding.severity}
-                </span>
-              </div>
-              <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">
-                {finding.description}
-              </p>
+          <div>
+            <label className="text-xs font-bold text-on-surface-variant block mb-1">
+              Nombre / Diagnóstico del Hallazgo *
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="Ej. Uña encarnada lateral / Heloma interdigital / Verruga plantar"
+              value={editingFinding.title}
+              onChange={(e) => setEditingFinding({ ...editingFinding, title: e.target.value })}
+              className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs font-bold text-on-surface-variant block mb-1">
+                Tipo de Condición
+              </label>
+              <select
+                value={editingFinding.condition}
+                onChange={(e) => setEditingFinding({ ...editingFinding, condition: e.target.value as FootFinding['condition'] })}
+                className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {CONDITIONS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-on-surface-variant block mb-1">
+                Severidad
+              </label>
+              <select
+                value={editingFinding.severity}
+                onChange={(e) => setEditingFinding({ ...editingFinding, severity: e.target.value as FootFinding['severity'] })}
+                className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="Agudo">Agudo (Dolor / Inflamación)</option>
+                <option value="Crónico">Crónico (Recurrente)</option>
+                <option value="Seguimiento">Seguimiento / Preventivo</option>
+              </select>
             </div>
           </div>
-        ))}
+
+          <div>
+            <label className="text-xs font-bold text-on-surface-variant block mb-1">
+              Descripción Clínica & Observaciones
+            </label>
+            <textarea
+              rows={2}
+              placeholder="Describe estado de la uña, tejido, profundidad, dolor referido por el paciente..."
+              value={editingFinding.description}
+              onChange={(e) => setEditingFinding({ ...editingFinding, description: e.target.value })}
+              className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setEditingFinding(null)}
+              className="px-3.5 py-2 rounded-xl bg-surface-container-high text-on-surface-variant text-xs font-bold hover:bg-surface-container"
+            >
+              Cerrar
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-container flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[16px]">check</span>
+              <span>Guardar Hallazgo</span>
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Lista de Hallazgos */}
+      <div className="space-y-2 pt-1">
+        {findings.length === 0 ? (
+          <p className="text-xs text-outline text-center py-4 bg-surface-container-low rounded-xl">
+            No hay hallazgos marcados en el pie. Haz clic en el diagrama anatómico para registrar uno.
+          </p>
+        ) : (
+          findings.map((finding) => (
+            <div
+              key={finding.id}
+              onClick={() => {
+                setSelectedFindingId(finding.id);
+                setEditingFinding(finding);
+              }}
+              className={`p-3 rounded-xl flex items-start justify-between gap-3 cursor-pointer transition-all border ${
+                finding.id === selectedFindingId
+                  ? 'bg-surface-container-low border-primary/40 shadow-xs'
+                  : 'bg-surface-container-low/60 border-transparent hover:bg-surface-container-low'
+              }`}
+            >
+              <div className="flex items-start gap-3 min-w-0">
+                <span
+                  className={`w-6 h-6 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5 text-white ${
+                    finding.severity === 'Agudo'
+                      ? 'bg-error'
+                      : finding.severity === 'Crónico'
+                      ? 'bg-secondary'
+                      : 'bg-primary-container'
+                  }`}
+                >
+                  {finding.markerNumber}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h5 className="font-semibold text-sm text-on-surface truncate">
+                      {finding.title}
+                    </h5>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        finding.severity === 'Agudo'
+                          ? 'bg-error-container text-on-error-container'
+                          : finding.severity === 'Crónico'
+                          ? 'bg-secondary-fixed text-on-secondary-fixed'
+                          : 'bg-surface-container-high text-on-surface-variant'
+                      }`}
+                    >
+                      {finding.severity}
+                    </span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">
+                    {finding.description}
+                  </p>
+                  <span className="text-[10px] text-outline mt-1 block">
+                    Pie {finding.foot} ({finding.view}) • Haz clic para editar
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(finding.id);
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-error-container/40 text-error flex-shrink-0"
+                title="Eliminar hallazgo"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+              </button>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

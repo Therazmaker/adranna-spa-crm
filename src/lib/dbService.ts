@@ -408,18 +408,31 @@ export const dbService = {
   },
 
   async savePodologyRecord(record: PodologyRecord): Promise<void> {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`adranna_podology_${record.clientId}`, JSON.stringify(record));
+    }
     if (!isSupabaseConfigured()) return;
     try {
       await supabase.from('podology_records').upsert({
-        exp_number: record.expNumber, diabetes_mellitus: record.diabetesMellitus,
-        diabetes_type: record.diabetesType, hypertension: record.hypertension,
-        peripheral_circulation: record.peripheralCirculation, latex_allergy: record.latexAllergy,
-        iodine_allergy: record.iodineAllergy, current_medications: record.currentMedications,
-        consultation_reason: record.consultationReason, findings: record.findings,
-        applied_treatment: record.appliedTreatment, autoclave_cycle_number: record.autoclaveCycleNumber,
-        is_sterilization_validated: record.isSterilizationValidated, photos: record.photos,
-        evolution_history: record.evolutionHistory, informed_consent: record.informedConsent,
-        audit: record.audit, updated_at: new Date().toISOString(),
+        client_id: record.clientId,
+        exp_number: record.expNumber || `POD-${record.clientId.slice(-4)}`,
+        diabetes_mellitus: record.diabetesMellitus,
+        diabetes_type: record.diabetesType,
+        hypertension: record.hypertension,
+        peripheral_circulation: record.peripheralCirculation,
+        latex_allergy: record.latexAllergy,
+        iodine_allergy: record.iodineAllergy,
+        current_medications: record.currentMedications,
+        consultation_reason: record.consultationReason,
+        findings: record.findings,
+        applied_treatment: record.appliedTreatment,
+        autoclave_cycle_number: record.autoclaveCycleNumber,
+        is_sterilization_validated: record.isSterilizationValidated,
+        photos: record.photos,
+        evolution_history: record.evolutionHistory,
+        informed_consent: record.informedConsent,
+        audit: record.audit,
+        updated_at: new Date().toISOString(),
       });
     } catch (e) { console.warn('savePodologyRecord:', e); }
   },
@@ -427,6 +440,12 @@ export const dbService = {
   // ─── EXPEDIENTES DE MASAJE ───────────────────────────────────────────────────
 
   async getMassageRecord(clientId: string): Promise<MassageRecord | null> {
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem(`adranna_massage_${clientId}`);
+      if (cached) {
+        try { return JSON.parse(cached); } catch { /* ignore */ }
+      }
+    }
     if (!isSupabaseConfigured()) return INITIAL_CAMILA_MASSAGE_RECORD;
     try {
       const { data, error } = await supabase
@@ -440,6 +459,29 @@ export const dbService = {
         lastSessionDate: data.last_session_date,
       };
     } catch { return null; }
+  },
+
+  async saveMassageRecord(record: MassageRecord): Promise<void> {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`adranna_massage_${record.clientId}`, JSON.stringify(record));
+    }
+    if (!isSupabaseConfigured()) return;
+    try {
+      await supabase.from('massage_records').upsert({
+        client_id: record.clientId,
+        massage_type: record.massageType,
+        preferred_pressure: record.preferredPressure,
+        tension_zones: record.tensionZones,
+        contraindications: record.contraindications,
+        aromatherapy_oil: record.aromatherapyOil,
+        session_notes: record.sessionNotes,
+        duration_minutes: record.durationMinutes,
+        last_session_date: record.lastSessionDate || new Date().toISOString().slice(0, 10),
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('saveMassageRecord:', e);
+    }
   },
 };
 

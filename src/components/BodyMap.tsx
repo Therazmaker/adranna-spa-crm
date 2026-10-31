@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface BodyMapProps {
   selectedZones: string[];
@@ -22,6 +22,13 @@ const BODY_ZONES = [
   { id: 'gemelos', label: 'Gemelos & Pantorrillas', top: '82%', left: '50%' },
 ];
 
+const DEFAULT_OILS = [
+  'Romero silvestre & Cedro blanco',
+  'Eucalipto & Menta revitalizante',
+  'Lavanda francesa relajante',
+  'Árnica desinflamante & Caléndula',
+];
+
 export default function BodyMap({
   selectedZones,
   onToggleZone,
@@ -37,12 +44,7 @@ export default function BodyMap({
     'Tejido Profundo',
   ];
 
-  const oils = [
-    'Romero silvestre & Cedro blanco',
-    'Eucalipto & Menta revitalizante',
-    'Lavanda francesa relajante',
-    'Árnica desinflamante & Caléndula',
-  ];
+  const [customOil, setCustomOil] = useState('');
 
   return (
     <div className="bg-surface-container-lowest rounded-2xl shadow-sm border border-surface-container-high/60 p-4 space-y-4">
@@ -61,7 +63,6 @@ export default function BodyMap({
       {/* Interactive Body Silhouette */}
       <div className="relative bg-surface-container-low rounded-2xl p-4 flex flex-col items-center justify-center border border-surface-container-high/80">
         <div className="relative w-full max-w-[240px] h-96 flex items-center justify-center select-none">
-          {/* Stylized Body Vector Outline */}
           <svg
             className="w-full h-full drop-shadow-sm"
             viewBox="0 0 200 360"
@@ -98,8 +99,8 @@ export default function BodyMap({
                 style={{ top: zone.top, left: zone.left, transform: 'translate(-50%, -50%)' }}
                 className={`absolute z-10 px-2 py-1 rounded-full text-[11px] font-bold transition-all shadow-sm ${
                   isSelected
-                    ? 'bg-secondary text-white scale-110 ring-4 ring-secondary/30'
-                    : 'bg-surface-container-lowest/90 text-on-surface-variant hover:bg-surface-container-lowest'
+                    ? 'bg-secondary text-white scale-110 ring-2 ring-secondary/50'
+                    : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container border border-surface-container-high'
                 }`}
               >
                 {zone.label}
@@ -107,15 +108,12 @@ export default function BodyMap({
             );
           })}
         </div>
-        <p className="text-xs text-outline text-center mt-2">
-          Toca las zonas de tensión para activarlas en el protocolo terapéutico.
-        </p>
       </div>
 
-      {/* Pressure Level Selector */}
+      {/* Presión Preferida */}
       <div className="space-y-2">
         <label className="text-xs uppercase tracking-wider text-secondary font-bold block">
-          Presión Preferida del Paciente
+          Nivel de Presión del Masaje
         </label>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {pressureLevels.map((lvl) => (
@@ -135,13 +133,14 @@ export default function BodyMap({
         </div>
       </div>
 
-      {/* Aromatherapy Selector */}
+      {/* Aromaterapia / Aceites Esenciales */}
       <div className="space-y-2">
         <label className="text-xs uppercase tracking-wider text-secondary font-bold block">
           Aceite Esencial & Aromaterapia
         </label>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {oils.map((oil) => (
+          {DEFAULT_OILS.map((oil) => (
             <button
               key={oil}
               type="button"
@@ -161,6 +160,42 @@ export default function BodyMap({
             </button>
           ))}
         </div>
+
+        {/* Campo para ingresar / personalizar el aceite en stock */}
+        <div className="pt-1 flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="O escribe otro aceite disponible en cabina (ej. Almendras & Naranja)..."
+            value={customOil}
+            onChange={(e) => setCustomOil(e.target.value)}
+            className="flex-1 bg-surface-container-low border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-secondary"
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (customOil.trim()) {
+                onSelectAromatherapy(customOil.trim());
+                setCustomOil('');
+              }
+            }}
+            className="px-3 py-2.5 rounded-xl bg-secondary text-white text-xs font-bold hover:bg-secondary/90 transition-colors"
+          >
+            Usar Este
+          </button>
+        </div>
+
+        {aromatherapyOil && !DEFAULT_OILS.includes(aromatherapyOil) && (
+          <div className="p-2 rounded-lg bg-secondary-container/30 border border-secondary/20 text-xs font-bold text-secondary flex items-center justify-between">
+            <span>Aceite seleccionado: {aromatherapyOil}</span>
+            <button
+              type="button"
+              onClick={() => onSelectAromatherapy('')}
+              className="text-outline hover:text-error"
+            >
+              <span className="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
