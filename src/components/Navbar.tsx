@@ -127,6 +127,9 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
             <Link href="/servicios" className="px-3 py-1.5 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors">
               Servicios
             </Link>
+            <Link href="/inventario" className="px-3 py-1.5 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors">
+              Inventario
+            </Link>
             <Link href="/equipo" className="px-3 py-1.5 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors">
               Equipo
             </Link>

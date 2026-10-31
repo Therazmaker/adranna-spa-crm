@@ -5,7 +5,17 @@ import {
   INITIAL_SOFIA_PODOLOGY_RECORD,
   INITIAL_CAMILA_MASSAGE_RECORD,
 } from './mockData';
-import { Client, Appointment, PodologyRecord, MassageRecord, Professional, ServicePackage, Expense } from '@/types/database';
+import {
+  Client,
+  Appointment,
+  PodologyRecord,
+  MassageRecord,
+  Professional,
+  ServicePackage,
+  Expense,
+  InventoryProduct,
+  SoldProductItem,
+} from '@/types/database';
 
 export interface PendingSyncItem {
   id: string;
@@ -15,6 +25,7 @@ export interface PendingSyncItem {
     | 'expenses'
     | 'professionals'
     | 'services'
+    | 'inventory_products'
     | 'podology_records'
     | 'massage_records';
   action: 'insert' | 'update' | 'upsert' | 'delete';
@@ -441,7 +452,15 @@ export const dbService = {
     if (updates.email !== undefined)                   payload.email = updates.email || null;
     if (updates.birthdate !== undefined)               payload.birthdate = updates.birthdate || null;
     if (updates.tags !== undefined)                    payload.tags = updates.tags;
-    if (updates.notes !== undefined)                   payload.notes = updates.notes || null;
+    if (updates.lastVisit !== undefined)               payload.last_visit = updates.lastVisit || null;
+    if (
+      updates.notes !== undefined ||
+      updates.reminderDate !== undefined ||
+      updates.reminderMessage !== undefined
+    ) {
+      const target = updatedLocal || ({ notes: updates.notes, reminderDate: updates.reminderDate, reminderMessage: updates.reminderMessage } as Client);
+      payload.notes = encodeClientNotes(target);
+    }
     if (updates.hasMedicalAlert !== undefined)         payload.has_medical_alert = updates.hasMedicalAlert;
     if (updates.medicalAlertDescription !== undefined) payload.medical_alert_description = updates.medicalAlertDescription || null;
     if (updates.totalVisits !== undefined)             payload.total_visits = updates.totalVisits;
@@ -637,7 +656,16 @@ export const dbService = {
     if (updates.status !== undefined)           payload.status = updates.status;
     if (updates.date !== undefined)             payload.appointment_date = updates.date;
     if (updates.time !== undefined)             payload.appointment_time = updates.time;
-    if (updates.notes !== undefined)            payload.notes = updates.notes;
+    if (
+      updates.notes !== undefined ||
+      updates.soldProducts !== undefined ||
+      updates.productsTotal !== undefined ||
+      updates.servicePrice !== undefined ||
+      updates.blockColor !== undefined
+    ) {
+      const target = updatedLocal || (updates as Appointment);
+      payload.notes = encodeAptNotes(target);
+    }
 
     if (!isBrowserOnline()) {
       enqueueSync({
@@ -1224,17 +1252,217 @@ export const dbService = {
       });
     }
   },
+
+  // ─── INVENTARIO DE PRODUCTOS ─────────────────────────────────────────────────
+
+  async getInventory(): Promise<InventoryProduct[]> {
+    const cached = readLocal<InventoryProduct[]>('adranna_inventory', []);
+
+    if (isSupabaseConfigured() && isBrowserOnline()) {
+      await this.syncPendingQueue();
+      try {
+        const { data, error } = await supabase
+          .from('inventory_products')
+          .select('*')
+          .order('name', { ascending: true });
+        if (!error && data && data.length > 0) {
+          const mapped: InventoryProduct[] = data.map((p) => ({
+            id: p.id,
+            name: p.name,
+            presentation: p.presentation || 'Unidad',
+            price: Number(p.price) || 0,
+            stock: p.stock ?? undefined,
+            category: p.category || 'General',
+            createdAt: p.created_at,
+          }));
+          writeLocal('adranna_inventory', mapped);
+          return mapped;
+        }
+      } catch {
+        // fallback a caché local
+      }
+    }
+
+    return cached;
+  },
+
+  async createInventoryProduct(prod: Omit<InventoryProduct, 'id'>): Promise<InventoryProduct> {
+    const id = generateUUID();
+    const newProd: InventoryProduct = { id, ...prod, createdAt: new Date().toISOString() };
+
+    const current = readLocal<InventoryProduct[]>('adranna_inventory', []);
+    writeLocal('adranna_inventory', [newProd, ...current]);
+
+    const row = {
+      id,
+      name: prod.name,
+      presentation: prod.presentation || 'Unidad',
+      price: prod.price,
+      stock: prod.stock ?? null,
+      category: prod.category || 'General',
+    };
+
+    if (isSupabaseConfigured()) {
+      if (!isBrowserOnline()) {
+        enqueueSync({
+          table: 'inventory_products',
+          action: 'insert',
+          recordId: id,
+          payload: row,
+          label: `Producto: ${prod.name}`,
+        });
+      } else {
+        try {
+          const { error } = await supabase.from('inventory_products').insert(row);
+          if (error && error.message?.toLowerCase().includes('fetch')) {
+            enqueueSync({
+              table: 'inventory_products',
+              action: 'insert',
+              recordId: id,
+              payload: row,
+              label: `Producto: ${prod.name}`,
+            });
+          }
+        } catch {
+          enqueueSync({
+            table: 'inventory_products',
+            action: 'insert',
+            recordId: id,
+            payload: row,
+            label: `Producto: ${prod.name}`,
+          });
+        }
+      }
+    }
+
+    return newProd;
+  },
+
+  async updateInventoryProduct(id: string, updates: Partial<InventoryProduct>): Promise<InventoryProduct | null> {
+    const current = readLocal<InventoryProduct[]>('adranna_inventory', []);
+    const updated = current.map((p) => (p.id === id ? { ...p, ...updates } : p));
+    writeLocal('adranna_inventory', updated);
+
+    const payload: Record<string, unknown> = {};
+    if (updates.name !== undefined) payload.name = updates.name;
+    if (updates.presentation !== undefined) payload.presentation = updates.presentation;
+    if (updates.price !== undefined) payload.price = updates.price;
+    if (updates.stock !== undefined) payload.stock = updates.stock;
+    if (updates.category !== undefined) payload.category = updates.category;
+
+    if (isSupabaseConfigured()) {
+      if (!isBrowserOnline()) {
+        enqueueSync({
+          table: 'inventory_products',
+          action: 'update',
+          recordId: id,
+          payload,
+          label: `Editar producto: ${updates.name || ''}`,
+        });
+      } else {
+        try {
+          await supabase.from('inventory_products').update(payload).eq('id', id);
+        } catch {
+          enqueueSync({
+            table: 'inventory_products',
+            action: 'update',
+            recordId: id,
+            payload,
+            label: `Editar producto: ${updates.name || ''}`,
+          });
+        }
+      }
+    }
+
+    return updated.find((p) => p.id === id) || null;
+  },
+
+  async deleteInventoryProduct(id: string): Promise<boolean> {
+    const current = readLocal<InventoryProduct[]>('adranna_inventory', []);
+    writeLocal(
+      'adranna_inventory',
+      current.filter((p) => p.id !== id)
+    );
+
+    if (isSupabaseConfigured()) {
+      if (!isBrowserOnline()) {
+        enqueueSync({
+          table: 'inventory_products',
+          action: 'delete',
+          recordId: id,
+          label: 'Eliminar producto',
+        });
+      } else {
+        try {
+          await supabase.from('inventory_products').delete().eq('id', id);
+        } catch {
+          enqueueSync({
+            table: 'inventory_products',
+            action: 'delete',
+            recordId: id,
+            label: 'Eliminar producto',
+          });
+        }
+      }
+    }
+    return true;
+  },
 };
+
+// ─── Helpers de codificación de metadatos en notes (100% compatible con Supabase) ───
+
+const META_MARKER = '\n<!--ADR_META:';
+const META_END = '-->';
+
+function parseMetaFromNotes<T>(rawNotes?: string | null): { cleanNotes?: string; meta: Partial<T> } {
+  if (!rawNotes) return { cleanNotes: undefined, meta: {} };
+  const idx = rawNotes.indexOf(META_MARKER);
+  if (idx === -1) return { cleanNotes: rawNotes, meta: {} };
+  const cleanNotes = rawNotes.slice(0, idx).trim() || undefined;
+  const start = idx + META_MARKER.length;
+  const end = rawNotes.indexOf(META_END, start);
+  const jsonStr = end !== -1 ? rawNotes.slice(start, end) : rawNotes.slice(start);
+  try {
+    return { cleanNotes, meta: JSON.parse(jsonStr) as Partial<T> };
+  } catch {
+    return { cleanNotes, meta: {} };
+  }
+}
+
+function encodeClientNotes(c: Partial<Client>): string | null {
+  const { cleanNotes } = parseMetaFromNotes(c.notes);
+  const meta: Record<string, unknown> = {};
+  if (c.reminderDate) meta.reminderDate = c.reminderDate;
+  if (c.reminderMessage) meta.reminderMessage = c.reminderMessage;
+  const hasMeta = Object.keys(meta).length > 0;
+  if (!cleanNotes && !hasMeta) return null;
+  return `${cleanNotes || ''}${hasMeta ? `${META_MARKER}${JSON.stringify(meta)}${META_END}` : ''}`;
+}
+
+function encodeAptNotes(a: Partial<Appointment>): string | null {
+  const { cleanNotes } = parseMetaFromNotes(a.notes);
+  const meta: Record<string, unknown> = {};
+  if (a.servicePrice !== undefined) meta.servicePrice = a.servicePrice;
+  if (a.soldProducts && a.soldProducts.length > 0) meta.soldProducts = a.soldProducts;
+  if (a.productsTotal !== undefined) meta.productsTotal = a.productsTotal;
+  if (a.blockColor) meta.blockColor = a.blockColor;
+  const hasMeta = Object.keys(meta).length > 0;
+  if (!cleanNotes && !hasMeta) return null;
+  return `${cleanNotes || ''}${hasMeta ? `${META_MARKER}${JSON.stringify(meta)}${META_END}` : ''}`;
+}
 
 // ─── Helpers de mapeo ────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapClient(c: any): Client {
+  const { cleanNotes, meta } = parseMetaFromNotes<{ reminderDate?: string; reminderMessage?: string }>(c.notes);
   return {
     id: c.id, name: c.name, phone: c.phone || '', email: c.email || '',
     birthdate: c.birthdate || '', avatarUrl: c.avatar_url || undefined,
     tags: c.tags || [], totalVisits: c.total_visits || 1,
-    lastVisit: c.last_visit, notes: c.notes,
+    lastVisit: c.last_visit, notes: cleanNotes,
+    reminderDate: meta.reminderDate,
+    reminderMessage: meta.reminderMessage,
     hasMedicalAlert: c.has_medical_alert || false,
     medicalAlertDescription: c.medical_alert_description,
     createdAt: c.created_at,
@@ -1243,16 +1471,26 @@ function mapClient(c: any): Client {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapAppointment(a: any): Appointment {
+  const { cleanNotes, meta } = parseMetaFromNotes<{
+    servicePrice?: number;
+    soldProducts?: SoldProductItem[];
+    productsTotal?: number;
+    blockColor?: string;
+  }>(a.notes);
   return {
     id: a.id, clientId: a.client_id, clientName: a.client_name,
     clientPhone: a.client_phone || '', professionalName: a.professional_name,
     professionalRole: a.professional_role || '', discipline: a.discipline,
     cabinId: 'cab-1', cabinName: a.cabin_name, serviceName: a.service_name,
     durationMinutes: a.duration_minutes || 45, price: Number(a.price) || 0,
+    servicePrice: meta.servicePrice,
+    soldProducts: meta.soldProducts,
+    productsTotal: meta.productsTotal,
+    blockColor: meta.blockColor,
     status: a.status, date: a.appointment_date,
     time: a.appointment_time?.slice(0, 5) || '10:00',
     hasMedicalAlert: a.has_medical_alert, medicalAlertText: a.medical_alert_text,
-    hasPendingConsent: a.has_pending_consent, notes: a.notes,
+    hasPendingConsent: a.has_pending_consent, notes: cleanNotes,
   };
 }
 
@@ -1264,6 +1502,6 @@ function aptToRow(apt: Partial<Appointment>): Record<string, unknown> {
     duration_minutes: apt.durationMinutes, price: apt.price, status: apt.status,
     appointment_date: apt.date, appointment_time: apt.time,
     has_medical_alert: apt.hasMedicalAlert, medical_alert_text: apt.medicalAlertText,
-    has_pending_consent: apt.hasPendingConsent, notes: apt.notes,
+    has_pending_consent: apt.hasPendingConsent, notes: encodeAptNotes(apt),
   };
 }

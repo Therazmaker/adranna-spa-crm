@@ -1,45 +1,140 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { dbService } from '@/lib/dbService';
 import { Appointment, Client, Professional } from '@/types/database';
 import AppointmentBottomSheet from '@/components/AppointmentBottomSheet';
-import NewAppointmentModal from '@/components/NewAppointmentModal';
+import NewAppointmentModal, { BLOCK_COLOR_PALETTE } from '@/components/NewAppointmentModal';
+import FinalizeSessionModal from '@/components/FinalizeSessionModal';
+
+type ViewMode = 'calendar' | 'list';
+type CalendarRange = 'dia' | 'semana' | 'quincena' | 'mensual';
+
+const HOURS = [
+  '08:00',
+  '09:00',
+  '10:00',
+  '11:00',
+  '12:00',
+  '13:00',
+  '14:00',
+  '15:00',
+  '16:00',
+  '17:00',
+  '18:00',
+  '19:00',
+  '20:00',
+];
+
+const DAY_NAMES_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+function toISODate(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseISODate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = parseISODate(dateStr);
+  d.setDate(d.getDate() + days);
+  return toISODate(d);
+}
+
+function getStartOfWeekMonday(dateStr: string): string {
+  const d = parseISODate(dateStr);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day; // Lunes como inicio de semana
+  d.setDate(d.getDate() + diff);
+  return toISODate(d);
+}
+
+function getAppointmentHourKey(timeStr?: string): string {
+  if (!timeStr) return '10:00';
+  const hourPart = timeStr.slice(0, 2);
+  const candidate = `${hourPart}:00`;
+  if (HOURS.includes(candidate)) return candidate;
+  return '10:00';
+}
+
+function getBlockColor(apt: Appointment): string {
+  if (apt.blockColor) return apt.blockColor;
+  if (apt.status === 'completado') return '#2E6F5E';
+  return apt.discipline === 'podologia' ? '#7A4F3A' : '#B87B31';
+}
 
 export default function AgendaPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
+
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [finalizingAppointment, setFinalizingAppointment] = useState<Appointment | null>(null);
+
   const [filterProfessional, setFilterProfessional] = useState<string>('all');
-  const [statusTab, setStatusTab] = useState<'activas' | 'finalizadas'>('activas');
+  const [statusTab, setStatusTab] = useState<'activas' | 'finalizadas' | 'todas'>('activas');
+  const [viewMode, setViewMode] = useState<ViewMode>('calendar');
+  const [calendarRange, setCalendarRange] = useState<CalendarRange>('semana');
+  const [anchorDate, setAnchorDate] = useState<string>(() => toISODate(new Date()));
+
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
+  const [slotDefaultDate, setSlotDefaultDate] = useState<string | undefined>(undefined);
+  const [slotDefaultTime, setSlotDefaultTime] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    const savedView = localStorage.getItem('adranna_agenda_view') as ViewMode | null;
+    if (savedView === 'calendar' || savedView === 'list') {
+      setViewMode(savedView);
+    }
+    const savedRange = localStorage.getItem('adranna_agenda_range') as CalendarRange | null;
+    if (savedRange && ['dia', 'semana', 'quincena', 'mensual'].includes(savedRange)) {
+      setCalendarRange(savedRange);
+    }
+
     dbService.getAppointments().then(setAppointments);
     dbService.getClients().then(setClients);
     dbService.getProfessionals().then(setProfessionals);
   }, []);
 
-  const byProfessional = appointments.filter((apt) => {
-    if (filterProfessional === 'all') return true;
-    return apt.professionalName.toLowerCase().includes(filterProfessional.toLowerCase());
-  });
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    localStorage.setItem('adranna_agenda_view', mode);
+  };
 
-  const activeAppointments = byProfessional.filter(
-    (apt) => apt.status !== 'completado' && apt.status !== 'cancelado'
+  const handleRangeChange = (range: CalendarRange) => {
+    setCalendarRange(range);
+    localStorage.setItem('adranna_agenda_range', range);
+  };
+
+  const byProfessional = useMemo(() => {
+    return appointments.filter((apt) => {
+      if (filterProfessional === 'all') return true;
+      return apt.professionalName.toLowerCase().includes(filterProfessional.toLowerCase());
+    });
+  }, [appointments, filterProfessional]);
+
+  const activeAppointments = useMemo(
+    () => byProfessional.filter((apt) => apt.status !== 'completado' && apt.status !== 'cancelado'),
+    [byProfessional]
   );
-  const completedAppointments = byProfessional.filter(
-    (apt) => apt.status === 'completado' || apt.status === 'cancelado'
+  const completedAppointments = useMemo(
+    () => byProfessional.filter((apt) => apt.status === 'completado' || apt.status === 'cancelado'),
+    [byProfessional]
   );
 
-  const displayedAppointments =
-    statusTab === 'activas' ? activeAppointments : completedAppointments;
+  const displayedAppointments = useMemo(() => {
+    if (statusTab === 'todas') return byProfessional;
+    return statusTab === 'activas' ? activeAppointments : completedAppointments;
+  }, [statusTab, byProfessional, activeAppointments, completedAppointments]);
 
   const handleAddAppointment = (newApt: Appointment) => {
     setAppointments((prev) => [newApt, ...prev]);
-    setStatusTab('activas');
   };
 
   const handleUpdateAppointment = (updated: Appointment) => {
@@ -49,12 +144,18 @@ export default function AgendaPage() {
   };
 
   const applyStatusChange = (apt: Appointment, newStatus: Appointment['status']) => {
+    if (newStatus === 'completado') {
+      // Abrir el modal de finalizar sesión con opción de venta de productos de inventario
+      setSelectedAppointment(null);
+      setFinalizingAppointment(apt);
+      return;
+    }
+
     const updated = { ...apt, status: newStatus };
     dbService.updateAppointment(apt.id, { status: newStatus });
     setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
 
-    // Si se marca como completada o se reabre desde el detalle, cerramos el panel para que pase de pestaña limpiamente
-    if (newStatus === 'completado' || (apt.status === 'completado' && newStatus === 'confirmado')) {
+    if (apt.status === 'completado' && newStatus === 'confirmado') {
       setSelectedAppointment(null);
     } else if (selectedAppointment?.id === apt.id) {
       setSelectedAppointment(updated);
@@ -64,6 +165,15 @@ export default function AgendaPage() {
   const handleStatusChange = (newStatus: Appointment['status']) => {
     if (!selectedAppointment) return;
     applyStatusChange(selectedAppointment, newStatus);
+  };
+
+  const handleColorChange = async (apt: Appointment, color: string) => {
+    const updated = { ...apt, blockColor: color };
+    setAppointments((prev) => prev.map((a) => (a.id === apt.id ? updated : a)));
+    if (selectedAppointment?.id === apt.id) {
+      setSelectedAppointment(updated);
+    }
+    await dbService.updateAppointment(apt.id, { blockColor: color });
   };
 
   const handleEditAppointment = (apt: Appointment) => {
@@ -79,34 +189,173 @@ export default function AgendaPage() {
     setSelectedAppointment(null);
   };
 
+  const openNewAtSlot = (dateStr: string, timeStr = '10:00') => {
+    setEditingAppointment(null);
+    setSlotDefaultDate(dateStr);
+    setSlotDefaultTime(timeStr);
+    setIsNewAppointmentOpen(true);
+  };
+
+  // Navegación de fechas en el calendario
+  const navigatePeriod = (dir: -1 | 1) => {
+    if (calendarRange === 'dia') {
+      setAnchorDate((prev) => addDays(prev, dir * 1));
+    } else if (calendarRange === 'semana') {
+      setAnchorDate((prev) => addDays(prev, dir * 7));
+    } else if (calendarRange === 'quincena') {
+      setAnchorDate((prev) => addDays(prev, dir * 15));
+    } else {
+      const d = parseISODate(anchorDate);
+      d.setMonth(d.getMonth() + dir);
+      setAnchorDate(toISODate(d));
+    }
+  };
+
+  // Columnas de días para Día / Semana / Quincena
+  const calendarDays = useMemo(() => {
+    if (calendarRange === 'dia') {
+      return [anchorDate];
+    }
+    if (calendarRange === 'semana') {
+      const start = getStartOfWeekMonday(anchorDate);
+      return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+    }
+    if (calendarRange === 'quincena') {
+      return Array.from({ length: 15 }, (_, i) => addDays(anchorDate, i));
+    }
+    return [];
+  }, [calendarRange, anchorDate]);
+
+  // Celdas del mes para vista Mensual
+  const monthCells = useMemo(() => {
+    const d = parseISODate(anchorDate);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const firstDayOfMonth = new Date(year, month, 1);
+    const lastDayOfMonth = new Date(year, month + 1, 0);
+
+    // Lunes = 0 ... Domingo = 6
+    const startOffset = (firstDayOfMonth.getDay() + 6) % 7;
+    const totalDays = lastDayOfMonth.getDate();
+
+    const cells: { dateStr: string; dayNum: number; isCurrentMonth: boolean }[] = [];
+
+    for (let i = startOffset - 1; i >= 0; i--) {
+      const prevDate = new Date(year, month, -i);
+      cells.push({
+        dateStr: toISODate(prevDate),
+        dayNum: prevDate.getDate(),
+        isCurrentMonth: false,
+      });
+    }
+
+    for (let day = 1; day <= totalDays; day++) {
+      const currDate = new Date(year, month, day);
+      cells.push({
+        dateStr: toISODate(currDate),
+        dayNum: day,
+        isCurrentMonth: true,
+      });
+    }
+
+    while (cells.length % 7 !== 0) {
+      const nextIdx = cells.length - (startOffset + totalDays) + 1;
+      const nextDate = new Date(year, month + 1, nextIdx);
+      cells.push({
+        dateStr: toISODate(nextDate),
+        dayNum: nextDate.getDate(),
+        isCurrentMonth: false,
+      });
+    }
+
+    return cells;
+  }, [anchorDate]);
+
+  const periodLabel = useMemo(() => {
+    const d = parseISODate(anchorDate);
+    if (calendarRange === 'dia') {
+      return d.toLocaleDateString('es-PE', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+    }
+    if (calendarRange === 'semana' || calendarRange === 'quincena') {
+      const first = parseISODate(calendarDays[0] || anchorDate);
+      const last = parseISODate(calendarDays[calendarDays.length - 1] || anchorDate);
+      return `${first.toLocaleDateString('es-PE', {
+        day: '2-digit',
+        month: 'short',
+      })} — ${last.toLocaleDateString('es-PE', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      })}`;
+    }
+    return d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
+  }, [calendarRange, anchorDate, calendarDays]);
+
+  const todayISO = toISODate(new Date());
+
   return (
     <div className="flex flex-col w-full pb-8 space-y-4">
       {/* Header Agenda */}
-      <div className="flex items-center justify-between pt-2">
+      <div className="flex items-center justify-between gap-2 pt-2 flex-wrap">
         <div>
           <h1 className="font-serif text-2xl font-bold text-primary tracking-tight">
-            Agenda Clínica & Spa
+            Agenda & Calendario por Bloques
           </h1>
           <p className="text-xs text-on-surface-variant mt-0.5">
-            {activeAppointments.length} por atender · {completedAppointments.length} finalizadas
+            {activeAppointments.length} por atender · {completedAppointments.length} finalizadas · Haz clic en cualquier cuadro vacío para agendar
           </p>
         </div>
 
-        <button
-          onClick={() => { setEditingAppointment(null); setIsNewAppointmentOpen(true); }}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary text-white shadow-sm hover:bg-primary-container active:scale-95 transition-all text-xs font-bold"
-        >
-          <span className="material-symbols-outlined text-[18px]">add</span>
-          <span>+ Nueva Cita</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Selector Vista Calendario (Excel) vs Lista */}
+          <div className="inline-flex bg-surface-container p-1 rounded-xl border border-surface-container-high">
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('calendar')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === 'calendar'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">grid_on</span>
+              <span>Calendario Bloques</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('list')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === 'list'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">view_agenda</span>
+              <span>Lista</span>
+            </button>
+          </div>
+
+          <button
+            onClick={() => openNewAtSlot(anchorDate, '10:00')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-primary text-white shadow-sm hover:bg-primary-container active:scale-95 transition-all text-xs font-bold"
+          >
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            <span>+ Nueva Cita</span>
+          </button>
+        </div>
       </div>
 
-      {/* Pestañas: Por Atender vs Finalizadas */}
-      <div className="grid grid-cols-2 bg-surface-container p-1 rounded-2xl border border-surface-container-high text-xs font-bold">
+      {/* Pestañas de Estado: Por Atender / Finalizadas / Todas */}
+      <div className="grid grid-cols-3 bg-surface-container p-1 rounded-2xl border border-surface-container-high text-xs font-bold">
         <button
           type="button"
           onClick={() => setStatusTab('activas')}
-          className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+          className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
             statusTab === 'activas'
               ? 'bg-surface-container-lowest text-primary shadow-xs'
               : 'text-on-surface-variant hover:text-primary'
@@ -128,7 +377,7 @@ export default function AgendaPage() {
         <button
           type="button"
           onClick={() => setStatusTab('finalizadas')}
-          className={`py-2 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+          className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
             statusTab === 'finalizadas'
               ? 'bg-surface-container-lowest text-primary shadow-xs'
               : 'text-on-surface-variant hover:text-primary'
@@ -146,6 +395,22 @@ export default function AgendaPage() {
             {completedAppointments.length}
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setStatusTab('todas')}
+          className={`py-2 px-2 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+            statusTab === 'todas'
+              ? 'bg-surface-container-lowest text-primary shadow-xs'
+              : 'text-on-surface-variant hover:text-primary'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">calendar_month</span>
+          <span>Ver Todas</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-surface-container-high text-on-surface-variant">
+            {byProfessional.length}
+          </span>
+        </button>
       </div>
 
       {/* Filtro Dinámico de Profesionales */}
@@ -160,7 +425,7 @@ export default function AgendaPage() {
             }`}
           >
             <span className="material-symbols-outlined text-[16px]">groups</span>
-            <span>Todos</span>
+            <span>Todos los Especialistas</span>
           </button>
 
           {professionals.map((prof) => (
@@ -180,163 +445,482 @@ export default function AgendaPage() {
         </div>
       )}
 
-      {/* Citas listadas */}
-      <div className="mt-1 flex flex-col gap-3">
-        {displayedAppointments.length === 0 ? (
-          <div className="py-12 flex flex-col items-center gap-3 bg-surface-container-lowest rounded-3xl p-8 border border-dashed border-surface-container-high text-center">
-            <span className="material-symbols-outlined text-4xl text-outline">
-              {statusTab === 'activas' ? 'event_available' : 'history'}
-            </span>
-            <div>
-              <span className="text-sm font-bold text-on-surface block">
-                {statusTab === 'activas'
-                  ? 'No hay citas pendientes por atender'
-                  : 'Aún no hay sesiones finalizadas'}
-              </span>
-              <span className="text-xs text-on-surface-variant block mt-0.5">
-                {statusTab === 'activas'
-                  ? 'Todas las sesiones fueron atendidas o puedes agendar una nueva cita.'
-                  : 'Las citas que marques como finalizadas aparecerán aquí como historial.'}
-              </span>
-            </div>
-            {statusTab === 'activas' && (
-              <button
-                onClick={() => { setEditingAppointment(null); setIsNewAppointmentOpen(true); }}
-                className="mt-1 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-container transition-all"
-              >
-                + Agendar Cita
-              </button>
-            )}
-          </div>
-        ) : (
-          displayedAppointments.map((apt) => {
-            const isPodo = apt.discipline === 'podologia';
-            const isCompleted = apt.status === 'completado';
-            return (
-              <div key={apt.id} className="flex gap-3 items-start">
-                <div className="w-14 flex-shrink-0 text-right pt-2">
-                  <span className="text-sm font-bold text-on-surface font-serif block">
-                    {apt.time}
-                  </span>
-                  <span className="text-[10px] text-outline font-semibold">
-                    {apt.date?.slice(5) || ''}
-                  </span>
-                </div>
-
-                <div
-                  onClick={() => setSelectedAppointment(apt)}
-                  className={`flex-1 bg-surface-container-lowest rounded-2xl p-4 shadow-xs border border-surface-container-high/60 cursor-pointer transition-all hover:shadow-md relative overflow-hidden ${
-                    isCompleted ? 'opacity-85' : ''
+      {/* ═══════════════════════════════════════════════════════════════════════
+          VISTA CALENDARIO POR BLOQUES (TIPO EXCEL)
+         ═══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'calendar' && (
+        <section className="bg-surface-container-lowest rounded-3xl border border-surface-container-high shadow-xs overflow-hidden flex flex-col">
+          {/* Barra de Herramientas del Calendario: Rango (Día / Semana / 15 Días / Mensual) + Navegación */}
+          <div className="p-3.5 sm:p-4 bg-surface-container-low border-b border-surface-container-high flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            {/* Selector Día, Semana, Quincena, Mensual */}
+            <div className="inline-flex bg-surface-container p-1 rounded-xl border border-surface-container-high self-start">
+              {(
+                [
+                  { id: 'dia', label: 'Día', icon: 'view_day' },
+                  { id: 'semana', label: 'Semana', icon: 'view_week' },
+                  { id: 'quincena', label: 'Quincena (15d)', icon: 'date_range' },
+                  { id: 'mensual', label: 'Mensual', icon: 'calendar_View_month' },
+                ] as { id: CalendarRange; label: string; icon: string }[]
+              ).map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => handleRangeChange(r.id)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                    calendarRange === r.id
+                      ? 'bg-surface-container-lowest text-primary shadow-xs'
+                      : 'text-on-surface-variant hover:text-primary'
                   }`}
                 >
+                  <span>{r.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Controles de fecha: Anterior / Hoy / Siguiente + Selector de fecha */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 flex-wrap">
+              <div className="flex items-center gap-1 bg-surface-container-lowest border border-surface-container-high rounded-xl p-1">
+                <button
+                  type="button"
+                  onClick={() => navigatePeriod(-1)}
+                  className="w-7 h-7 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface"
+                  title="Periodo anterior"
+                >
+                  <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAnchorDate(todayISO)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-primary hover:bg-primary-container/15 transition-colors"
+                >
+                  Hoy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigatePeriod(1)}
+                  className="w-7 h-7 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface"
+                  title="Periodo siguiente"
+                >
+                  <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                </button>
+              </div>
+
+              <span className="font-serif text-sm sm:text-base font-bold text-primary capitalize px-1">
+                {periodLabel}
+              </span>
+
+              <input
+                type="date"
+                value={anchorDate}
+                onChange={(e) => e.target.value && setAnchorDate(e.target.value)}
+                className="bg-surface-container-lowest border border-surface-container-high rounded-xl px-2.5 py-1.5 text-xs font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                title="Saltar a fecha específica"
+              />
+            </div>
+          </div>
+
+          {/* Leyenda de Colores Personalizables */}
+          <div className="px-4 py-2 bg-surface-container-lowest border-b border-surface-container-high/60 flex items-center justify-between gap-2 flex-wrap text-[11px]">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-outline uppercase tracking-wider text-[10px]">
+                Colores de bloque:
+              </span>
+              {BLOCK_COLOR_PALETTE.slice(0, 6).map((c) => (
+                <span key={c.id} className="inline-flex items-center gap-1 text-on-surface-variant font-medium">
+                  <span className="w-2.5 h-2.5 rounded-xs inline-block" style={{ backgroundColor: c.id }} />
+                  <span>{c.label.split(' ')[0]}</span>
+                </span>
+              ))}
+            </div>
+            <span className="text-[11px] text-outline">
+              💡 Haz clic en cualquier celda vacía para crear una cita en esa hora
+            </span>
+          </div>
+
+          {/* ── GRILLA EXCEL: DÍA / SEMANA / QUINCENA (HORAS × DÍAS) ─────────── */}
+          {calendarRange !== 'mensual' ? (
+            <div className="overflow-x-auto w-full">
+              <table className="w-full border-collapse min-w-[680px] table-fixed">
+                <thead>
+                  <tr className="bg-surface-container-low border-b border-surface-container-high">
+                    <th className="w-16 sm:w-20 py-2.5 px-2 text-[11px] font-bold uppercase tracking-wider text-outline border-r border-surface-container-high text-center sticky left-0 bg-surface-container-low z-10">
+                      Hora
+                    </th>
+                    {calendarDays.map((dStr) => {
+                      const dObj = parseISODate(dStr);
+                      const isToday = dStr === todayISO;
+                      const dayAptsCount = displayedAppointments.filter(
+                        (a) => (a.date || todayISO) === dStr
+                      ).length;
+
+                      return (
+                        <th
+                          key={dStr}
+                          className={`py-2 px-1.5 border-r border-surface-container-high text-center ${
+                            calendarRange === 'quincena' ? 'w-28' : ''
+                          } ${isToday ? 'bg-primary-container/15' : ''}`}
+                        >
+                          <div className="flex flex-col items-center">
+                            <span
+                              className={`text-[10px] font-bold uppercase ${
+                                isToday ? 'text-primary' : 'text-outline'
+                              }`}
+                            >
+                              {DAY_NAMES_SHORT[dObj.getDay()]}
+                            </span>
+                            <span
+                              className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center font-serif text-sm font-bold ${
+                                isToday
+                                  ? 'bg-primary text-white shadow-2xs'
+                                  : 'text-on-surface'
+                              }`}
+                            >
+                              {dObj.getDate()}
+                            </span>
+                            {dayAptsCount > 0 && (
+                              <span className="mt-0.5 text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-surface-container-high text-on-surface-variant">
+                                {dayAptsCount} {dayAptsCount === 1 ? 'cita' : 'citas'}
+                              </span>
+                            )}
+                          </div>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-surface-container-high/70">
+                  {HOURS.map((hour) => (
+                    <tr key={hour} className="group/row hover:bg-surface-container-low/30">
+                      {/* Columna fija de hora tipo hoja de cálculo */}
+                      <td className="py-2 px-2 text-center font-mono text-xs font-bold text-on-surface-variant border-r border-surface-container-high bg-surface-container-low/60 sticky left-0 z-10">
+                        {hour}
+                      </td>
+
+                      {/* Celdas por cada día */}
+                      {calendarDays.map((dStr) => {
+                        const cellApts = displayedAppointments.filter(
+                          (a) =>
+                            (a.date || todayISO) === dStr &&
+                            getAppointmentHourKey(a.time) === hour
+                        );
+                        const isToday = dStr === todayISO;
+
+                        return (
+                          <td
+                            key={`${dStr}-${hour}`}
+                            onClick={() => {
+                              if (cellApts.length === 0) {
+                                openNewAtSlot(dStr, hour);
+                              }
+                            }}
+                            className={`p-1 align-top border-r border-surface-container-high/70 min-h-[58px] h-14 transition-colors relative group/cell cursor-pointer ${
+                              isToday ? 'bg-primary-container/5' : ''
+                            } hover:bg-primary-container/10`}
+                          >
+                            {/* Botón flotante '+' para agregar en esa celda incluso si ya hay 1 cita */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openNewAtSlot(dStr, hour);
+                              }}
+                              title={`Agendar el ${dStr} a las ${hour}`}
+                              className="opacity-0 group-hover/cell:opacity-100 absolute top-1 right-1 w-5 h-5 rounded-md bg-primary/90 text-white flex items-center justify-center shadow-xs transition-opacity z-10"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">add</span>
+                            </button>
+
+                            <div className="flex flex-col gap-1">
+                              {cellApts.map((apt) => {
+                                const bgColor = getBlockColor(apt);
+                                const isDone = apt.status === 'completado';
+                                return (
+                                  <div
+                                    key={apt.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedAppointment(apt);
+                                    }}
+                                    style={{ backgroundColor: bgColor }}
+                                    className={`rounded-lg p-1.5 text-white shadow-2xs hover:brightness-110 transition-all cursor-pointer flex flex-col gap-0.5 border border-black/10 ${
+                                      isDone ? 'opacity-80' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between gap-1">
+                                      <span className="text-[10px] font-bold opacity-95 truncate">
+                                        {apt.time} · {apt.clientName}
+                                      </span>
+                                      {isDone && (
+                                        <span className="material-symbols-outlined text-[12px] flex-shrink-0">
+                                          task_alt
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] opacity-90 truncate font-medium">
+                                      {apt.serviceName}
+                                    </span>
+                                    <div className="flex items-center justify-between gap-1 text-[9px] opacity-85 pt-0.5 border-t border-white/15">
+                                      <span className="truncate">{apt.professionalName}</span>
+                                      <span className="font-bold flex-shrink-0">S/{apt.price}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            /* ── GRILLA MENSUAL POR BLOQUES ──────────────────────────────────── */
+            <div className="w-full overflow-x-auto">
+              <div className="min-w-[640px]">
+                <div className="grid grid-cols-7 bg-surface-container-low border-b border-surface-container-high text-center">
+                  {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((dName) => (
+                    <div
+                      key={dName}
+                      className="py-2 text-[11px] font-bold uppercase tracking-wider text-outline border-r last:border-r-0 border-surface-container-high"
+                    >
+                      {dName}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 divide-x divide-y divide-surface-container-high">
+                  {monthCells.map((cell) => {
+                    const dayApts = displayedAppointments
+                      .filter((a) => (a.date || todayISO) === cell.dateStr)
+                      .sort((a, b) => a.time.localeCompare(b.time));
+                    const isToday = cell.dateStr === todayISO;
+
+                    return (
+                      <div
+                        key={cell.dateStr}
+                        onClick={() => openNewAtSlot(cell.dateStr, '10:00')}
+                        className={`min-h-[115px] p-1.5 flex flex-col gap-1 transition-colors cursor-pointer group/mcell ${
+                          cell.isCurrentMonth
+                            ? 'bg-surface-container-lowest'
+                            : 'bg-surface-container-low/50 opacity-60'
+                        } ${isToday ? 'ring-2 ring-inset ring-primary/50 bg-primary-container/5' : ''} hover:bg-primary-container/10`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span
+                            className={`w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center ${
+                              isToday
+                                ? 'bg-primary text-white'
+                                : 'text-on-surface-variant'
+                            }`}
+                          >
+                            {cell.dayNum}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openNewAtSlot(cell.dateStr, '10:00');
+                            }}
+                            className="opacity-0 group-hover/mcell:opacity-100 w-5 h-5 rounded bg-primary text-white flex items-center justify-center text-xs"
+                            title={`Agendar el ${cell.dateStr}`}
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <div className="flex flex-col gap-1 overflow-y-auto max-h-[88px]">
+                          {dayApts.map((apt) => {
+                            const bgColor = getBlockColor(apt);
+                            return (
+                              <div
+                                key={apt.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedAppointment(apt);
+                                }}
+                                style={{ backgroundColor: bgColor }}
+                                className="px-1.5 py-1 rounded text-[10px] text-white font-semibold truncate shadow-2xs hover:brightness-110"
+                                title={`${apt.time} - ${apt.clientName} (${apt.serviceName})`}
+                              >
+                                {apt.time} {apt.clientName}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          VISTA DE LISTA CLÁSICA
+         ═══════════════════════════════════════════════════════════════════════ */}
+      {viewMode === 'list' && (
+        <div className="mt-1 flex flex-col gap-3">
+          {displayedAppointments.length === 0 ? (
+            <div className="py-12 flex flex-col items-center gap-3 bg-surface-container-lowest rounded-3xl p-8 border border-dashed border-surface-container-high text-center">
+              <span className="material-symbols-outlined text-4xl text-outline">
+                {statusTab === 'activas' ? 'event_available' : 'history'}
+              </span>
+              <div>
+                <span className="text-sm font-bold text-on-surface block">
+                  {statusTab === 'activas'
+                    ? 'No hay citas pendientes por atender'
+                    : 'Aún no hay sesiones finalizadas'}
+                </span>
+                <span className="text-xs text-on-surface-variant block mt-0.5">
+                  {statusTab === 'activas'
+                    ? 'Todas las sesiones fueron atendidas o puedes agendar una nueva cita.'
+                    : 'Las citas que marques como finalizadas aparecerán aquí como historial.'}
+                </span>
+              </div>
+              {statusTab === 'activas' && (
+                <button
+                  onClick={() => openNewAtSlot(anchorDate, '10:00')}
+                  className="mt-1 px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-container transition-all"
+                >
+                  + Agendar Cita
+                </button>
+              )}
+            </div>
+          ) : (
+            displayedAppointments.map((apt) => {
+              const isPodo = apt.discipline === 'podologia';
+              const isCompleted = apt.status === 'completado';
+              const blockColor = getBlockColor(apt);
+              return (
+                <div key={apt.id} className="flex gap-3 items-start">
+                  <div className="w-14 flex-shrink-0 text-right pt-2">
+                    <span className="text-sm font-bold text-on-surface font-serif block">
+                      {apt.time}
+                    </span>
+                    <span className="text-[10px] text-outline font-semibold">
+                      {apt.date?.slice(5) || ''}
+                    </span>
+                  </div>
+
                   <div
-                    className={`absolute left-0 top-0 bottom-0 w-1.5 ${
-                      isCompleted
-                        ? 'bg-emerald-600'
-                        : isPodo
-                        ? 'bg-primary-container'
-                        : 'bg-secondary'
+                    onClick={() => setSelectedAppointment(apt)}
+                    className={`flex-1 bg-surface-container-lowest rounded-2xl p-4 shadow-xs border border-surface-container-high/60 cursor-pointer transition-all hover:shadow-md relative overflow-hidden ${
+                      isCompleted ? 'opacity-85' : ''
                     }`}
-                  />
-                  <div className="flex items-start justify-between gap-2 pl-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
+                  >
+                    <div
+                      style={{ backgroundColor: blockColor }}
+                      className="absolute left-0 top-0 bottom-0 w-2"
+                    />
+                    <div className="flex items-start justify-between gap-2 pl-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                              isPodo
+                                ? 'bg-primary-container/10 text-primary-container'
+                                : 'bg-secondary-container/50 text-secondary'
+                            }`}
+                          >
+                            {apt.serviceName}
+                          </span>
+                          <span className="text-xs text-outline">{apt.durationMinutes} min</span>
+                          {apt.soldProducts && apt.soldProducts.length > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                              +{apt.soldProducts.length} prod.
+                            </span>
+                          )}
+                        </div>
+
+                        <h3 className="font-serif text-base text-on-surface font-bold mt-1.5 flex items-center gap-1.5">
+                          {apt.clientName}
+                          {apt.hasMedicalAlert && (
+                            <span
+                              className="material-symbols-outlined text-[16px] text-error"
+                              title="Tiene alerta médica"
+                            >
+                              warning
+                            </span>
+                          )}
+                        </h3>
+
+                        <div className="flex items-center gap-3 mt-1 text-xs text-on-surface-variant flex-wrap">
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[15px] text-primary">
+                              badge
+                            </span>
+                            {apt.professionalName}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[15px] text-secondary">
+                              door_front
+                            </span>
+                            {apt.cabinName}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                         <span
-                          className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                            isPodo
-                              ? 'bg-primary-container/10 text-primary-container'
-                              : 'bg-secondary-container/50 text-secondary'
+                          className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                            apt.status === 'en_curso'
+                              ? 'bg-amber-100 text-amber-800'
+                              : isCompleted
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-surface-container-high text-on-surface-variant'
                           }`}
                         >
-                          {apt.serviceName}
-                        </span>
-                        <span className="text-xs text-outline">{apt.durationMinutes} min</span>
-                      </div>
-
-                      <h3 className="font-serif text-base text-on-surface font-bold mt-1.5 flex items-center gap-1.5">
-                        {apt.clientName}
-                        {apt.hasMedicalAlert && (
-                          <span
-                            className="material-symbols-outlined text-[16px] text-error"
-                            title="Tiene alerta médica"
-                          >
-                            warning
-                          </span>
-                        )}
-                      </h3>
-
-                      <div className="flex items-center gap-3 mt-1 text-xs text-on-surface-variant flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[15px] text-primary">
-                            badge
-                          </span>
-                          {apt.professionalName}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[15px] text-secondary">
-                            door_front
-                          </span>
-                          {apt.cabinName}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                          apt.status === 'en_curso'
-                            ? 'bg-amber-100 text-amber-800'
+                          {apt.status === 'en_curso'
+                            ? 'En Curso'
                             : isCompleted
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-surface-container-high text-on-surface-variant'
-                        }`}
-                      >
-                        {apt.status === 'en_curso'
-                          ? 'En Curso'
-                          : isCompleted
-                          ? 'Finalizada'
-                          : 'Confirmada'}
-                      </span>
-                      <span className="text-xs font-bold text-primary">
-                        S/ {apt.price}
-                      </span>
+                            ? 'Finalizada'
+                            : 'Confirmada'}
+                        </span>
+                        <span className="text-xs font-bold text-primary">
+                          S/ {apt.price}
+                        </span>
 
-                      {/* Acción rápida en 1 toque */}
-                      {!isCompleted ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            applyStatusChange(apt, 'completado');
-                          }}
-                          title="Marcar sesión como finalizada"
-                          className="mt-0.5 px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-[11px] font-bold hover:bg-emerald-800 active:scale-95 transition-all flex items-center gap-1 shadow-2xs"
-                        >
-                          <span className="material-symbols-outlined text-[13px]">check</span>
-                          <span>Finalizar</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            applyStatusChange(apt, 'confirmado');
-                          }}
-                          title="Devolver a citas por atender"
-                          className="mt-0.5 px-2 py-1 rounded-lg bg-surface-container-high text-on-surface-variant text-[10px] font-bold hover:text-primary transition-colors flex items-center gap-1"
-                        >
-                          <span className="material-symbols-outlined text-[13px]">replay</span>
-                          <span>Reabrir</span>
-                        </button>
-                      )}
+                        {/* Acción rápida en 1 toque */}
+                        {!isCompleted ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFinalizingAppointment(apt);
+                            }}
+                            title="Finalizar sesión y consultar compra de productos"
+                            className="mt-0.5 px-2.5 py-1 rounded-lg bg-emerald-700 text-white text-[11px] font-bold hover:bg-emerald-800 active:scale-95 transition-all flex items-center gap-1 shadow-2xs"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">check</span>
+                            <span>Finalizar</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              applyStatusChange(apt, 'confirmado');
+                            }}
+                            title="Devolver a citas por atender"
+                            className="mt-0.5 px-2 py-1 rounded-lg bg-surface-container-high text-on-surface-variant text-[10px] font-bold hover:text-primary transition-colors flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-[13px]">replay</span>
+                            <span>Reabrir</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* Bottom Sheet Appointment Detail */}
       <AppointmentBottomSheet
@@ -345,16 +929,37 @@ export default function AgendaPage() {
         onStatusChange={handleStatusChange}
         onEdit={handleEditAppointment}
         onDelete={handleDeleteAppointment}
+        onColorChange={handleColorChange}
+      />
+
+      {/* Modal Finalizar Sesión + Venta de Productos de Inventario */}
+      <FinalizeSessionModal
+        appointment={finalizingAppointment}
+        onClose={() => setFinalizingAppointment(null)}
+        onFinalized={(updatedApt) => {
+          setAppointments((prev) =>
+            prev.map((a) => (a.id === updatedApt.id ? updatedApt : a))
+          );
+          setFinalizingAppointment(null);
+          setSelectedAppointment(null);
+        }}
       />
 
       {/* Modal Nueva / Editar Cita */}
       <NewAppointmentModal
         isOpen={isNewAppointmentOpen}
-        onClose={() => { setIsNewAppointmentOpen(false); setEditingAppointment(null); }}
+        onClose={() => {
+          setIsNewAppointmentOpen(false);
+          setEditingAppointment(null);
+          setSlotDefaultDate(undefined);
+          setSlotDefaultTime(undefined);
+        }}
         clients={clients}
         onAddAppointment={handleAddAppointment}
         onUpdateAppointment={handleUpdateAppointment}
         editingAppointment={editingAppointment}
+        defaultDate={slotDefaultDate}
+        defaultTime={slotDefaultTime}
       />
     </div>
   );

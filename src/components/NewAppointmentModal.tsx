@@ -5,6 +5,17 @@ import Link from 'next/link';
 import { Appointment, Client, Professional, ServicePackage } from '@/types/database';
 import { dbService } from '@/lib/dbService';
 
+export const BLOCK_COLOR_PALETTE = [
+  { id: '#7A4F3A', label: 'Terracota Spa' },
+  { id: '#2E6F5E', label: 'Esmeralda Clínica' },
+  { id: '#5B6291', label: 'Lavanda Relajante' },
+  { id: '#B87B31', label: 'Ámbar Dorado' },
+  { id: '#2F6889', label: 'Azul Clínico' },
+  { id: '#A8526B', label: 'Rosa Cuarzo' },
+  { id: '#52734D', label: 'Salvia Botánica' },
+  { id: '#9B4444', label: 'Coral Intenso' },
+];
+
 interface NewAppointmentModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,6 +23,8 @@ interface NewAppointmentModalProps {
   onAddAppointment: (appointment: Appointment) => void;
   onUpdateAppointment?: (appointment: Appointment) => void;
   editingAppointment?: Appointment | null;
+  defaultDate?: string;
+  defaultTime?: string;
 }
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -23,6 +36,8 @@ export default function NewAppointmentModal({
   onAddAppointment,
   onUpdateAppointment,
   editingAppointment,
+  defaultDate,
+  defaultTime,
 }: NewAppointmentModalProps) {
   const isEdit = !!editingAppointment;
 
@@ -42,6 +57,7 @@ export default function NewAppointmentModal({
   const [price, setPrice] = useState(0);
   const [duration, setDuration] = useState(45);
   const [notes, setNotes] = useState('');
+  const [blockColor, setBlockColor] = useState(BLOCK_COLOR_PALETTE[0].id);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -65,13 +81,15 @@ export default function NewAppointmentModal({
       setPrice(editingAppointment.price);
       setDuration(editingAppointment.durationMinutes);
       setNotes(editingAppointment.notes || '');
+      setBlockColor(editingAppointment.blockColor || BLOCK_COLOR_PALETTE[0].id);
     } else {
       setSelectedClientId(clients[0]?.id || '');
       setDiscipline('podologia');
-      setTime('10:00');
-      setDate(todayStr());
+      setTime(defaultTime || '10:00');
+      setDate(defaultDate || todayStr());
       setCabin('Cabina 1');
       setNotes('');
+      setBlockColor(BLOCK_COLOR_PALETTE[0].id);
 
       // Auto-seleccionar primer profesional disponible si existe
       if (professionalsList.length > 0) {
@@ -93,7 +111,7 @@ export default function NewAppointmentModal({
         setDuration(45);
       }
     }
-  }, [editingAppointment, clients, isOpen, professionalsList, servicesList]);
+  }, [editingAppointment, clients, isOpen, professionalsList, servicesList, defaultDate, defaultTime]);
 
   // Cuando cambia el servicio seleccionado en el dropdown
   const handleServiceSelect = (val: string) => {
@@ -147,7 +165,11 @@ export default function NewAppointmentModal({
       serviceName: serviceName.trim(),
       durationMinutes: duration,
       price,
-      status: 'confirmado' as Appointment['status'],
+      servicePrice: editingAppointment?.servicePrice ?? price,
+      soldProducts: editingAppointment?.soldProducts,
+      productsTotal: editingAppointment?.productsTotal,
+      blockColor,
+      status: (editingAppointment?.status || 'confirmado') as Appointment['status'],
       date,
       time,
       hasMedicalAlert: client.hasMedicalAlert,
@@ -399,14 +421,60 @@ export default function NewAppointmentModal({
             </div>
           </div>
 
-          {/* Notas */}
+          {/* 6. Color del Bloque en Vista Calendario */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-on-surface-variant flex items-center gap-1">
+                <span className="material-symbols-outlined text-[15px] text-primary">palette</span>
+                <span>Color del Bloque en el Calendario</span>
+              </label>
+              <span className="text-[11px] font-bold text-primary">
+                {BLOCK_COLOR_PALETTE.find((c) => c.id === blockColor)?.label || 'Color personalizado'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap pt-0.5">
+              {BLOCK_COLOR_PALETTE.map((col) => {
+                const isSelected = blockColor === col.id;
+                return (
+                  <button
+                    key={col.id}
+                    type="button"
+                    onClick={() => setBlockColor(col.id)}
+                    title={col.label}
+                    style={{ backgroundColor: col.id }}
+                    className={`w-8 h-8 rounded-xl transition-all flex items-center justify-center text-white shadow-xs ${
+                      isSelected ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'opacity-75 hover:opacity-100'
+                    }`}
+                  >
+                    {isSelected && (
+                      <span className="material-symbols-outlined text-[16px]">check</span>
+                    )}
+                  </button>
+                );
+              })}
+              <label
+                title="Elegir otro color libremente"
+                className="w-8 h-8 rounded-xl border border-dashed border-primary/50 flex items-center justify-center cursor-pointer hover:bg-surface-container relative overflow-hidden"
+              >
+                <span className="material-symbols-outlined text-[16px] text-primary">colorize</span>
+                <input
+                  type="color"
+                  value={blockColor}
+                  onChange={(e) => setBlockColor(e.target.value)}
+                  className="opacity-0 absolute inset-0 cursor-pointer"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Notas / Motivo */}
           <div className="space-y-1">
             <label className="text-xs font-semibold text-on-surface-variant block">
-              Notas adicionales (opcional)
+              Motivo de la consulta / Notas adicionales
             </label>
             <textarea
               rows={2}
-              placeholder="Indicaciones para la sesión..."
+              placeholder="Ej. Dolor en hallux derecho, control mensual, contractura cervical..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary resize-none"

@@ -11,6 +11,25 @@ export interface Expense {
   createdAt?: string;
 }
 
+export interface InventoryProduct {
+  id: string;
+  name: string;
+  presentation: string; // ej. "30 ml", "100 g", "Unidad"
+  price: number;
+  stock?: number;
+  category?: string;
+  createdAt?: string;
+}
+
+export interface SoldProductItem {
+  productId: string;
+  name: string;
+  presentation: string;
+  unitPrice: number;
+  quantity: number;
+  subtotal?: number;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -22,6 +41,8 @@ export interface Client {
   totalVisits: number;
   lastVisit?: string;
   nextAppointment?: string;
+  reminderDate?: string;
+  reminderMessage?: string;
   notes?: string;
   hasMedicalAlert?: boolean;
   medicalAlertDescription?: string;
@@ -40,7 +61,11 @@ export interface Appointment {
   cabinName: string;
   serviceName: string;
   durationMinutes: number;
-  price: number;
+  price: number; // Total (servicio + productos)
+  servicePrice?: number; // Precio base del servicio
+  soldProducts?: SoldProductItem[];
+  productsTotal?: number;
+  blockColor?: string; // Color personalizado en vista calendario
   status: 'confirmado' | 'en_curso' | 'completado' | 'cancelado';
   date: string; // YYYY-MM-DD
   time: string; // HH:MM

@@ -28,7 +28,6 @@ const TAGS_VERSION = 'v2-sin-predefinidas';
 function getStoredTags(): string[] {
   if (typeof window === 'undefined') return DEFAULT_TAGS;
   try {
-    // Migración única: descartar las etiquetas de ejemplo guardadas antes
     if (localStorage.getItem('adranna_client_tags_version') !== TAGS_VERSION) {
       localStorage.removeItem('adranna_client_tags');
       localStorage.setItem('adranna_client_tags_version', TAGS_VERSION);
@@ -213,7 +212,7 @@ function ClientFormModal({
               <label className="text-xs font-bold text-on-surface-variant block mb-1">Teléfono</label>
               <input
                 type="tel"
-                placeholder="+52 55 0000 0000"
+                placeholder="+51 900 000 000"
                 value={form.phone}
                 onChange={(e) => set('phone', e.target.value)}
                 className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
@@ -404,7 +403,6 @@ export default function ClientesPage() {
 
     dbService.getClients().then((data) => {
       if (mounted) {
-        // Limpiar cualquier residuo de VIP de los clientes cargados
         const sanitized = data.map((c) => ({
           ...c,
           tags: c.tags.filter((t) => t && !t.toLowerCase().includes('vip')),
@@ -438,7 +436,7 @@ export default function ClientesPage() {
     setIsAddingTagFilter(false);
   };
 
-  // Calcular lista dinámica de pestañas de filtro (Todos + customTags + tags de clientes existentes)
+  // Calcular lista dinámica de pestañas de filtro
   const clientTags = clients.flatMap((c) => c.tags).filter((t) => t && !t.toLowerCase().includes('vip') && t !== 'Nuevo Paciente' && t !== 'Paciente');
   const allAvailableTags = Array.from(new Set([...customTags, ...clientTags]));
   const tagsList = ['all', ...allAvailableTags];
@@ -486,13 +484,11 @@ export default function ClientesPage() {
     };
 
     if (editingClient) {
-      // UPDATE
       const updated = await dbService.updateClient(editingClient.id, payload);
       if (updated) {
         setClients((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       }
     } else {
-      // CREATE
       const created = await dbService.createClient(payload);
       setClients((prev) => [created, ...prev]);
     }
@@ -683,13 +679,15 @@ export default function ClientesPage() {
             >
               {/* Top row: avatar + name + actions */}
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-3 min-w-0">
+                <Link href={`/pacientes/${client.id}`} className="flex items-center gap-3 min-w-0 group">
                   {/* Avatar monograma */}
-                  <div className={`w-12 h-12 rounded-full font-bold text-sm flex items-center justify-center flex-shrink-0 shadow-xs border border-surface-container-high ${avatarColor(client.id)}`}>
+                  <div className={`w-12 h-12 rounded-full font-bold text-sm flex items-center justify-center flex-shrink-0 shadow-xs border border-surface-container-high group-hover:ring-2 group-hover:ring-primary/40 transition-all ${avatarColor(client.id)}`}>
                     {getInitials(client.name)}
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-serif text-base font-bold text-on-surface truncate">{client.name}</h3>
+                    <h3 className="font-serif text-base font-bold text-on-surface group-hover:text-primary transition-colors truncate">
+                      {client.name}
+                    </h3>
                     <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
                       <span className="material-symbols-outlined text-[14px] text-secondary">phone</span>
                       <span>{client.phone || '—'}</span>
@@ -701,7 +699,7 @@ export default function ClientesPage() {
                       </p>
                     )}
                   </div>
-                </div>
+                </Link>
 
                 {/* Acciones rápidas: editar + borrar */}
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -768,18 +766,25 @@ export default function ClientesPage() {
                 })}
               </div>
 
-              {/* Fichas especializadas */}
-              <div className="pt-2 border-t border-surface-container-high/60 flex items-center gap-2">
+              {/* Fichas especializadas y Perfil */}
+              <div className="pt-2 border-t border-surface-container-high/60 grid grid-cols-3 gap-1.5">
+                <Link
+                  href={`/pacientes/${client.id}`}
+                  className="py-2 px-2 rounded-xl bg-surface-container-high text-on-surface hover:bg-primary hover:text-white transition-all text-xs font-bold text-center flex items-center justify-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[15px]">person</span>
+                  <span>Perfil</span>
+                </Link>
                 <Link
                   href={`/pacientes/${client.id}/podologia`}
-                  className="flex-1 py-2 px-3 rounded-xl bg-primary-container/10 text-primary hover:bg-primary-container hover:text-white transition-all text-xs font-bold text-center flex items-center justify-center gap-1"
+                  className="py-2 px-2 rounded-xl bg-primary-container/10 text-primary hover:bg-primary-container hover:text-white transition-all text-xs font-bold text-center flex items-center justify-center gap-1"
                 >
                   <span className="material-symbols-outlined text-[15px]">footprint</span>
                   <span>Podología</span>
                 </Link>
                 <Link
                   href={`/pacientes/${client.id}/masaje`}
-                  className="flex-1 py-2 px-3 rounded-xl bg-secondary-container/40 text-secondary hover:bg-secondary hover:text-white transition-all text-xs font-bold text-center flex items-center justify-center gap-1"
+                  className="py-2 px-2 rounded-xl bg-secondary-container/40 text-secondary hover:bg-secondary hover:text-white transition-all text-xs font-bold text-center flex items-center justify-center gap-1"
                 >
                   <span className="material-symbols-outlined text-[15px]">spa</span>
                   <span>Masaje</span>
@@ -806,12 +811,12 @@ export default function ClientesPage() {
                   className="grid grid-cols-[1fr_auto] md:grid-cols-[2fr_1.2fr_1.6fr_auto_auto] items-center gap-x-3 gap-y-1 px-3 md:px-4 py-2.5 hover:bg-surface-container-low/60 transition-colors"
                 >
                   {/* Paciente */}
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 border border-surface-container-high ${avatarColor(client.id)}`}>
+                  <Link href={`/pacientes/${client.id}`} className="flex items-center gap-2.5 min-w-0 group">
+                    <div className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 border border-surface-container-high group-hover:ring-2 group-hover:ring-primary/40 transition-all ${avatarColor(client.id)}`}>
                       {getInitials(client.name)}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-on-surface truncate flex items-center gap-1">
+                      <p className="text-sm font-bold text-on-surface group-hover:text-primary transition-colors truncate flex items-center gap-1">
                         {client.name}
                         {client.hasMedicalAlert && (
                           <span className="material-symbols-outlined text-[15px] text-error flex-shrink-0" title={client.medicalAlertDescription || 'Alerta médica'}>warning</span>
@@ -819,7 +824,7 @@ export default function ClientesPage() {
                       </p>
                       <p className="md:hidden text-[11px] text-on-surface-variant truncate">{client.phone || client.email || '—'}</p>
                     </div>
-                  </div>
+                  </Link>
 
                   {/* Contacto (desktop) */}
                   <div className="hidden md:block min-w-0 text-xs text-on-surface-variant">
@@ -846,6 +851,13 @@ export default function ClientesPage() {
 
                   {/* Acciones */}
                   <div className="flex items-center justify-end gap-0.5">
+                    <Link
+                      href={`/pacientes/${client.id}`}
+                      title="Perfil e historial de visitas"
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-on-surface hover:bg-surface-container-high hover:text-primary transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">person</span>
+                    </Link>
                     <Link
                       href={`/pacientes/${client.id}/podologia`}
                       title="Ficha de podología"

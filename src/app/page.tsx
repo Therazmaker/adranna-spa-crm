@@ -6,6 +6,7 @@ import { dbService } from '@/lib/dbService';
 import { Appointment, Client, Professional, ServicePackage } from '@/types/database';
 import AppointmentBottomSheet from '@/components/AppointmentBottomSheet';
 import NewAppointmentModal from '@/components/NewAppointmentModal';
+import FinalizeSessionModal from '@/components/FinalizeSessionModal';
 import { useAuth } from '@/context/AuthContext';
 
 export default function DashboardPage() {
@@ -20,6 +21,7 @@ export default function DashboardPage() {
 
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
+  const [finalizingAppointment, setFinalizingAppointment] = useState<Appointment | null>(null);
   const [filterDiscipline, setFilterDiscipline] = useState<'all' | 'podologia' | 'masaje'>('all');
   const [statusTab, setStatusTab] = useState<'activas' | 'finalizadas'>('activas');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
@@ -79,11 +81,17 @@ export default function DashboardPage() {
   };
 
   const applyStatusChange = (apt: Appointment, newStatus: Appointment['status']) => {
+    if (newStatus === 'completado') {
+      setSelectedAppointment(null);
+      setFinalizingAppointment(apt);
+      return;
+    }
+
     const updated = { ...apt, status: newStatus };
     dbService.updateAppointment(apt.id, { status: newStatus });
     setAppointments((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
 
-    if (newStatus === 'completado' || (apt.status === 'completado' && newStatus === 'confirmado')) {
+    if (apt.status === 'completado' && newStatus === 'confirmado') {
       setSelectedAppointment(null);
     } else if (selectedAppointment?.id === apt.id) {
       setSelectedAppointment(updated);
@@ -554,6 +562,19 @@ export default function DashboardPage() {
         onStatusChange={handleStatusChange}
         onEdit={handleEditAppointment}
         onDelete={handleDeleteAppointment}
+      />
+
+      {/* Modal Finalizar Sesión + Venta de Productos */}
+      <FinalizeSessionModal
+        appointment={finalizingAppointment}
+        onClose={() => setFinalizingAppointment(null)}
+        onFinalized={(updatedApt) => {
+          setAppointments((prev) =>
+            prev.map((a) => (a.id === updatedApt.id ? updatedApt : a))
+          );
+          setFinalizingAppointment(null);
+          setSelectedAppointment(null);
+        }}
       />
 
       {/* Modal Nueva / Editar Cita */}

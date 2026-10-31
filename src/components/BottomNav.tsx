@@ -14,20 +14,21 @@ export default function BottomNav() {
     { label: 'Agenda', path: '/agenda', icon: 'calendar_today' },
     { label: 'Clientes', path: '/clientes', icon: 'group' },
     { label: 'Servicios', path: '/servicios', icon: 'medical_services' },
+    { label: 'Inventario', path: '/inventario', icon: 'inventory_2' },
     { label: 'Equipo', path: '/equipo', icon: 'badge' },
   ];
 
   const navItems = isAdmin
     ? [
-        ...baseNavItems.slice(0, 4),
+        ...baseNavItems.slice(0, 5),
         { label: 'Caja', path: '/contabilidad', icon: 'account_balance_wallet' },
-        baseNavItems[4],
+        baseNavItems[5],
       ]
     : baseNavItems;
 
   return (
     <nav className="fixed bottom-0 w-full z-50 pb-safe bg-surface/92 backdrop-blur-xl border-t border-surface-container-high/80 shadow-[0_-2px_12px_rgba(0,0,0,0.04)]">
-      <div className="h-16 max-w-lg mx-auto flex items-center justify-around px-2">
+      <div className="h-16 max-w-lg mx-auto flex items-center justify-around px-1">
         {navItems.map((item) => {
           const isActive =
             item.path === '/'
@@ -38,7 +39,7 @@ export default function BottomNav() {
             <Link
               key={item.path}
               href={item.path}
-              className={`flex flex-col items-center justify-center min-w-[56px] py-1 transition-all ${
+              className={`flex flex-col items-center justify-center min-w-[44px] py-1 transition-all ${
                 isActive
                   ? 'text-primary font-bold scale-105'
                   : 'text-on-surface-variant/80 hover:text-primary font-medium'
