@@ -22,6 +22,7 @@ function avatarColor(id: string) {
 
 // Sin etiquetas predefinidas: el usuario crea las que necesite.
 const DEFAULT_TAGS: string[] = [];
+const PAGE_SIZE = 40;
 const TAGS_VERSION = 'v2-sin-predefinidas';
 
 function getStoredTags(): string[] {
@@ -364,6 +365,24 @@ export default function ClientesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState('all');
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  const changeView = (mode: 'cards' | 'list') => {
+    setViewMode(mode);
+    localStorage.setItem('adranna_clients_view', mode);
+  };
+
+  // Recordar la vista elegida
+  useEffect(() => {
+    const saved = localStorage.getItem('adranna_clients_view');
+    if (saved === 'list' || saved === 'cards') setViewMode(saved);
+  }, []);
+
+  // Al buscar o filtrar, volver a la primera página
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchQuery, activeTag, viewMode]);
 
   // Inline creación de etiqueta en la barra de filtros
   const [isAddingTagFilter, setIsAddingTagFilter] = useState(false);
@@ -435,6 +454,8 @@ export default function ClientesPage() {
     const matchTag = activeTag === 'all' || c.tags.some((t) => t.toLowerCase() === activeTag.toLowerCase());
     return matchSearch && matchTag;
   });
+
+  const visibleClients = filtered.slice(0, visibleCount);
 
   // ── Save (create / update) ────────────────────────────────────────────────
   const handleSave = async (form: typeof EMPTY_FORM) => {
@@ -542,6 +563,41 @@ export default function ClientesPage() {
         )}
       </div>
 
+      {/* Barra de vista: contador + alternar tarjetas / lista */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold text-on-surface-variant">
+          {filtered.length === clients.length
+            ? `${clients.length} paciente${clients.length !== 1 ? 's' : ''}`
+            : `${filtered.length} de ${clients.length} pacientes`}
+        </span>
+        <div className="inline-flex bg-surface-container p-0.5 rounded-xl border border-surface-container-high">
+          <button
+            type="button"
+            onClick={() => changeView('cards')}
+            aria-label="Vista de tarjetas"
+            title="Tarjetas"
+            className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1 text-[11px] font-bold transition-all ${
+              viewMode === 'cards' ? 'bg-surface-container-lowest text-primary shadow-xs' : 'text-on-surface-variant hover:text-primary'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">grid_view</span>
+            <span className="hidden sm:inline">Tarjetas</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => changeView('list')}
+            aria-label="Vista de lista"
+            title="Lista"
+            className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1 text-[11px] font-bold transition-all ${
+              viewMode === 'list' ? 'bg-surface-container-lowest text-primary shadow-xs' : 'text-on-surface-variant hover:text-primary'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">view_list</span>
+            <span className="hidden sm:inline">Lista</span>
+          </button>
+        </div>
+      </div>
+
       {/* Tags filtro dinámicos con creación de etiqueta propia */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-gutter-mobile px-gutter-mobile">
         {tagsList.map((tag) => (
@@ -618,8 +674,9 @@ export default function ClientesPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-          {filtered.map((client) => (
+      <>
+        <div className={viewMode === 'cards' ? 'grid grid-cols-1 md:grid-cols-2 gap-3 pt-1' : 'hidden'}>
+          {visibleClients.map((client) => (
             <div
               key={client.id}
               className="bg-surface-container-lowest rounded-2xl p-4 shadow-xs border border-surface-container-high/60 flex flex-col gap-3 hover:shadow-md transition-shadow"
@@ -731,6 +788,111 @@ export default function ClientesPage() {
             </div>
           ))}
         </div>
+
+        {/* Vista de lista compacta */}
+        {viewMode === 'list' && (
+          <div className="bg-surface-container-lowest rounded-2xl border border-surface-container-high/60 shadow-xs overflow-hidden">
+            <div className="hidden md:grid grid-cols-[2fr_1.2fr_1.6fr_auto_auto] gap-3 px-4 py-2 bg-surface-container-low text-[10px] uppercase tracking-wider font-bold text-outline border-b border-surface-container-high/60">
+              <span>Paciente</span>
+              <span>Contacto</span>
+              <span>Etiquetas</span>
+              <span className="text-center">Visitas</span>
+              <span className="text-right pr-1">Acciones</span>
+            </div>
+            <ul className="divide-y divide-surface-container-high/60">
+              {visibleClients.map((client) => (
+                <li
+                  key={client.id}
+                  className="grid grid-cols-[1fr_auto] md:grid-cols-[2fr_1.2fr_1.6fr_auto_auto] items-center gap-x-3 gap-y-1 px-3 md:px-4 py-2.5 hover:bg-surface-container-low/60 transition-colors"
+                >
+                  {/* Paciente */}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center flex-shrink-0 border border-surface-container-high ${avatarColor(client.id)}`}>
+                      {getInitials(client.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-on-surface truncate flex items-center gap-1">
+                        {client.name}
+                        {client.hasMedicalAlert && (
+                          <span className="material-symbols-outlined text-[15px] text-error flex-shrink-0" title={client.medicalAlertDescription || 'Alerta médica'}>warning</span>
+                        )}
+                      </p>
+                      <p className="md:hidden text-[11px] text-on-surface-variant truncate">{client.phone || client.email || '—'}</p>
+                    </div>
+                  </div>
+
+                  {/* Contacto (desktop) */}
+                  <div className="hidden md:block min-w-0 text-xs text-on-surface-variant">
+                    <p className="truncate">{client.phone || '—'}</p>
+                    {client.email && <p className="truncate text-[11px] text-outline">{client.email}</p>}
+                  </div>
+
+                  {/* Etiquetas (desktop) */}
+                  <div className="hidden md:flex flex-wrap gap-1 min-w-0">
+                    {client.tags.slice(0, 3).map((t) => (
+                      <span key={t} className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-primary-container/15 text-primary border-primary/20 truncate max-w-[110px]">
+                        {t}
+                      </span>
+                    ))}
+                    {client.tags.length > 3 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 text-outline">+{client.tags.length - 3}</span>
+                    )}
+                  </div>
+
+                  {/* Visitas (desktop) */}
+                  <span className="hidden md:inline-block text-center text-[11px] font-bold px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">
+                    {client.totalVisits}
+                  </span>
+
+                  {/* Acciones */}
+                  <div className="flex items-center justify-end gap-0.5">
+                    <Link
+                      href={`/pacientes/${client.id}/podologia`}
+                      title="Ficha de podología"
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-primary hover:bg-primary-container/20 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">footprint</span>
+                    </Link>
+                    <Link
+                      href={`/pacientes/${client.id}/masaje`}
+                      title="Ficha de masaje"
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-secondary hover:bg-secondary-container/50 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">spa</span>
+                    </Link>
+                    <button
+                      onClick={() => openEdit(client)}
+                      aria-label="Editar paciente"
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-primary hover:bg-primary-container/20 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">edit</span>
+                    </button>
+                    <button
+                      onClick={() => setClientToDelete(client)}
+                      aria-label="Eliminar paciente"
+                      className="w-8 h-8 flex items-center justify-center rounded-full text-error hover:bg-error-container/40 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Ver más (paginación progresiva) */}
+        {filtered.length > visibleClients.length && (
+          <div className="flex justify-center pt-1">
+            <button
+              onClick={() => setVisibleCount((n) => n + PAGE_SIZE)}
+              className="px-5 py-2 rounded-xl bg-surface-container-high text-on-surface text-xs font-bold hover:bg-surface-container transition-colors"
+            >
+              Ver más ({filtered.length - visibleClients.length} restantes)
+            </button>
+          </div>
+        )}
+      </>
       )}
 
       {/* Modal Crear / Editar */}
