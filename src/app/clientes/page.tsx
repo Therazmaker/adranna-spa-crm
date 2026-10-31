@@ -20,18 +20,26 @@ function avatarColor(id: string) {
   return PALETTE[n];
 }
 
-const DEFAULT_TAGS = ['Pie Diabético', 'Podología', 'Masaje', 'Drenaje Linfático', 'Alergia Látex'];
+// Sin etiquetas predefinidas: el usuario crea las que necesite.
+const DEFAULT_TAGS: string[] = [];
+const TAGS_VERSION = 'v2-sin-predefinidas';
 
 function getStoredTags(): string[] {
   if (typeof window === 'undefined') return DEFAULT_TAGS;
   try {
+    // Migración única: descartar las etiquetas de ejemplo guardadas antes
+    if (localStorage.getItem('adranna_client_tags_version') !== TAGS_VERSION) {
+      localStorage.removeItem('adranna_client_tags');
+      localStorage.setItem('adranna_client_tags_version', TAGS_VERSION);
+      return DEFAULT_TAGS;
+    }
     const raw = localStorage.getItem('adranna_client_tags');
     if (!raw) return DEFAULT_TAGS;
     const parsed: string[] = JSON.parse(raw);
     const cleaned = parsed.filter(
       (t) => t && t.trim() !== '' && !t.toLowerCase().includes('vip')
     );
-    return cleaned.length > 0 ? cleaned : DEFAULT_TAGS;
+    return cleaned;
   } catch {
     return DEFAULT_TAGS;
   }
@@ -127,7 +135,7 @@ function ClientFormModal({
           phone: initial.phone,
           email: initial.email,
           birthdate: initial.birthdate || '',
-          condition: initial.tags.filter((t) => !['Nuevo Paciente'].includes(t) && !t.toLowerCase().includes('vip')).join(', '),
+          condition: initial.tags.filter((t) => !['Nuevo Paciente', 'Paciente'].includes(t) && !t.toLowerCase().includes('vip')).join(', '),
           isDiabetic: initial.hasMedicalAlert ?? false,
           notes: initial.notes || '',
         }
@@ -412,7 +420,7 @@ export default function ClientesPage() {
   };
 
   // Calcular lista dinámica de pestañas de filtro (Todos + customTags + tags de clientes existentes)
-  const clientTags = clients.flatMap((c) => c.tags).filter((t) => t && !t.toLowerCase().includes('vip') && t !== 'Nuevo Paciente');
+  const clientTags = clients.flatMap((c) => c.tags).filter((t) => t && !t.toLowerCase().includes('vip') && t !== 'Nuevo Paciente' && t !== 'Paciente');
   const allAvailableTags = Array.from(new Set([...customTags, ...clientTags]));
   const tagsList = ['all', ...allAvailableTags];
 
@@ -434,7 +442,6 @@ export default function ClientesPage() {
     setIsSaving(true);
 
     const tags: string[] = [];
-    if (form.isDiabetic) tags.push('Pie Diabético');
     form.condition
       .split(',')
       .map((s) => s.trim())
@@ -442,7 +449,6 @@ export default function ClientesPage() {
       .forEach((t) => {
         if (!tags.includes(t)) tags.push(t);
       });
-    if (tags.length === 0) tags.push('Paciente');
 
     const payload = {
       name: form.name.trim(),
