@@ -240,7 +240,7 @@ export default function PacienteGeneralPage() {
                 {client.email && (
                   <>
                     <span>•</span>
-                    <span className="truncate">{client.email}</span>
+                    <span className="truncate">DNI: {client.email}</span>
                   </>
                 )}
               </p>

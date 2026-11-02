@@ -206,7 +206,7 @@ function ClientFormModal({
             />
           </div>
 
-          {/* Teléfono + Email */}
+          {/* Teléfono + DNI */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs font-bold text-on-surface-variant block mb-1">Teléfono</label>
@@ -219,10 +219,12 @@ function ClientFormModal({
               />
             </div>
             <div>
-              <label className="text-xs font-bold text-on-surface-variant block mb-1">Correo</label>
+              <label className="text-xs font-bold text-on-surface-variant block mb-1">DNI</label>
               <input
-                type="email"
-                placeholder="paciente@mail.com"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="Ej. 74859612"
                 value={form.email}
                 onChange={(e) => set('email', e.target.value)}
                 className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
@@ -544,7 +546,7 @@ export default function ClientesPage() {
         <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] text-outline">search</span>
         <input
           type="text"
-          placeholder="Buscar por nombre, teléfono, correo o condición..."
+          placeholder="Buscar por nombre, teléfono, DNI o condición..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full pl-10 pr-10 py-3 rounded-2xl bg-surface-container-lowest border border-surface-container-high text-xs font-semibold text-on-surface placeholder:text-outline focus:outline-none focus:ring-2 focus:ring-primary shadow-xs"
@@ -694,8 +696,8 @@ export default function ClientesPage() {
                     </p>
                     {client.email && (
                       <p className="text-xs text-on-surface-variant flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[14px] text-outline">mail</span>
-                        <span className="truncate">{client.email}</span>
+                        <span className="material-symbols-outlined text-[14px] text-outline">badge</span>
+                        <span className="truncate">DNI: {client.email}</span>
                       </p>
                     )}
                   </div>
@@ -829,7 +831,7 @@ export default function ClientesPage() {
                   {/* Contacto (desktop) */}
                   <div className="hidden md:block min-w-0 text-xs text-on-surface-variant">
                     <p className="truncate">{client.phone || '—'}</p>
-                    {client.email && <p className="truncate text-[11px] text-outline">{client.email}</p>}
+                    {client.email && <p className="truncate text-[11px] text-outline">DNI: {client.email}</p>}
                   </div>
 
                   {/* Etiquetas (desktop) */}
