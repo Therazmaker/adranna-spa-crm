@@ -259,19 +259,34 @@ export default function PacienteGeneralPage() {
           </div>
         </div>
 
-        {/* Alerta Médica si aplica */}
-        {client.hasMedicalAlert && (
+        {/* Alerta Médica / Antecedentes y Medicamentos */}
+        {(client.hasMedicalAlert ||
+          (client.preexistingConditions && client.preexistingConditions.length > 0) ||
+          client.currentMedications ||
+          client.medicalHistory) && (
           <div className="bg-error-container/40 border border-error/20 p-3.5 rounded-xl flex items-start gap-3">
             <span className="material-symbols-outlined text-error text-lg flex-shrink-0 mt-0.5">
               warning
             </span>
-            <div>
+            <div className="space-y-1">
               <span className="text-xs font-bold text-on-error-container block">
-                Condición Médica de Cuidado
+                Antecedentes Médicos & Medicación
               </span>
-              <p className="text-xs text-on-surface font-semibold mt-0.5">
-                {client.medicalAlertDescription || 'Paciente con protocolo clínico especial.'}
+              <p className="text-xs text-on-surface font-semibold">
+                {client.preexistingConditions && client.preexistingConditions.length > 0
+                  ? client.preexistingConditions.join(', ')
+                  : client.medicalAlertDescription || 'Paciente con protocolo clínico especial.'}
               </p>
+              {client.medicalHistory && (
+                <p className="text-[11px] text-on-surface">
+                  <span className="font-bold">Otras condiciones / Cirugías:</span> {client.medicalHistory}
+                </p>
+              )}
+              {client.currentMedications && (
+                <p className="text-[11px] text-on-surface">
+                  <span className="font-bold">Medicamentos actuales:</span> {client.currentMedications}
+                </p>
+              )}
             </div>
           </div>
         )}

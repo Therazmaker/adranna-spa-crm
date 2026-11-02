@@ -29,28 +29,57 @@ export default function PodologiaRecordPage() {
   const [showAntecedentes, setShowAntecedentes] = useState(false);
 
   useEffect(() => {
-    dbService.getClients().then((clients) => {
-      const found = clients.find((c) => c.id === clientId);
-      if (found) {
-        setClient(found);
-      }
-    });
+    Promise.all([dbService.getClients(), dbService.getPodologyRecord(clientId)]).then(
+      ([clients, rec]) => {
+        const found = clients.find((c) => c.id === clientId);
+        if (found) {
+          setClient(found);
+        }
 
-    dbService.getPodologyRecord(clientId).then((rec) => {
-      if (rec) {
-        setRecord(rec);
-        setDiabetes(rec.diabetesMellitus || false);
-        setHypertension(rec.hypertension || false);
-        setCirculation(rec.peripheralCirculation || false);
-        setLatexAllergy(rec.latexAllergy || false);
-        setTreatmentNotes(rec.appliedTreatment || '');
-        setMedications(rec.currentMedications?.join(', ') || '');
-        setConsultationReason(rec.consultationReason || '');
-        if (rec.diabetesMellitus || rec.hypertension || rec.peripheralCirculation || rec.latexAllergy || (rec.currentMedications && rec.currentMedications.length > 0)) {
-          setShowAntecedentes(true);
+        const preConds = found?.preexistingConditions || [];
+        const hasDiabFromClient = found?.hasMedicalAlert || preConds.includes('Diabetes Mellitus');
+        const hasHyperFromClient = preConds.includes('Hipertensión');
+        const hasCircFromClient = preConds.includes('Mala Circulación');
+        const hasLatexFromClient = preConds.includes('Alergia al Látex');
+        const medsFromClient = found?.currentMedications || '';
+
+        if (rec) {
+          setRecord(rec);
+          setDiabetes(rec.diabetesMellitus || hasDiabFromClient);
+          setHypertension(rec.hypertension || hasHyperFromClient);
+          setCirculation(rec.peripheralCirculation || hasCircFromClient);
+          setLatexAllergy(rec.latexAllergy || hasLatexFromClient);
+          setTreatmentNotes(rec.appliedTreatment || '');
+          setMedications(
+            (rec.currentMedications && rec.currentMedications.length > 0)
+              ? rec.currentMedications.join(', ')
+              : medsFromClient
+          );
+          setConsultationReason(rec.consultationReason || '');
+          if (
+            rec.diabetesMellitus ||
+            rec.hypertension ||
+            rec.peripheralCirculation ||
+            rec.latexAllergy ||
+            (rec.currentMedications && rec.currentMedications.length > 0) ||
+            preConds.length > 0 ||
+            medsFromClient
+          ) {
+            setShowAntecedentes(true);
+          }
+        } else {
+          // Si es nueva ficha, auto-poblar antecedentes desde la ficha general
+          setDiabetes(hasDiabFromClient);
+          setHypertension(hasHyperFromClient);
+          setCirculation(hasCircFromClient);
+          setLatexAllergy(hasLatexFromClient);
+          setMedications(medsFromClient);
+          if (preConds.length > 0 || medsFromClient || hasDiabFromClient) {
+            setShowAntecedentes(true);
+          }
         }
       }
-    });
+    );
   }, [clientId]);
 
   const handleAddFinding = (newFinding: FootFinding) => {

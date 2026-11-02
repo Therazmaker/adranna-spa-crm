@@ -51,10 +51,29 @@ function saveStoredTags(tags: string[]) {
   localStorage.setItem('adranna_client_tags', JSON.stringify(cleaned));
 }
 
+// ─── Opciones comunes de Enfermedades Preexistentes ──────────────────────────
+const COMMON_PREEXISTING = [
+  'Diabetes Mellitus',
+  'Hipertensión',
+  'Mala Circulación',
+  'Alergia al Látex',
+  'Problemas de Coagulación',
+  'Marcapasos / Prótesis',
+  'Embarazo',
+];
+
 // ─── Formulario vacío ─────────────────────────────────────────────────────────
 const EMPTY_FORM = {
-  name: '', phone: '', email: '', birthdate: '',
-  condition: '', isDiabetic: false, notes: '',
+  name: '',
+  phone: '',
+  email: '',
+  birthdate: '',
+  condition: '',
+  preexistingConditions: [] as string[],
+  currentMedications: '',
+  medicalHistory: '',
+  isDiabetic: false,
+  notes: '',
 };
 
 // ─── Componente confirmación borrar ──────────────────────────────────────────
@@ -135,18 +154,45 @@ function ClientFormModal({
           phone: initial.phone,
           email: initial.email,
           birthdate: initial.birthdate || '',
-          condition: initial.tags.filter((t) => !['Nuevo Paciente', 'Paciente'].includes(t) && !t.toLowerCase().includes('vip')).join(', '),
-          isDiabetic: initial.hasMedicalAlert ?? false,
+          condition: initial.tags
+            .filter((t) => !['Nuevo Paciente', 'Paciente'].includes(t) && !t.toLowerCase().includes('vip'))
+            .join(', '),
+          preexistingConditions:
+            initial.preexistingConditions ||
+            (initial.hasMedicalAlert && initial.medicalAlertDescription?.includes('Diabetes')
+              ? ['Diabetes Mellitus']
+              : []),
+          currentMedications: initial.currentMedications || '',
+          medicalHistory: initial.medicalHistory || '',
+          isDiabetic:
+            (initial.hasMedicalAlert ?? false) ||
+            (initial.preexistingConditions || []).includes('Diabetes Mellitus'),
           notes: initial.notes || '',
         }
-      : { ...EMPTY_FORM }
+      : { ...EMPTY_FORM, preexistingConditions: [] }
   );
 
   const [newTagInput, setNewTagInput] = useState('');
   const [showNewTagInput, setShowNewTagInput] = useState(false);
 
-  const set = (k: keyof typeof EMPTY_FORM, v: string | boolean) =>
+  const set = <K extends keyof typeof EMPTY_FORM>(k: K, v: (typeof EMPTY_FORM)[K]) =>
     setForm((prev) => ({ ...prev, [k]: v }));
+
+  const togglePreexisting = (item: string) => {
+    setForm((prev) => {
+      const exists = prev.preexistingConditions.includes(item);
+      const nextList = exists
+        ? prev.preexistingConditions.filter((x) => x !== item)
+        : [...prev.preexistingConditions, item];
+      const nextDiabetic =
+        item === 'Diabetes Mellitus' ? !exists : prev.isDiabetic || nextList.includes('Diabetes Mellitus');
+      return {
+        ...prev,
+        preexistingConditions: nextList,
+        isDiabetic: nextDiabetic,
+      };
+    });
+  };
 
   const handleAddTagToCondition = (tag: string) => {
     const current = form.condition
@@ -318,9 +364,74 @@ function ClientFormModal({
             </div>
           </div>
 
+          {/* Antecedentes Médicos, Enfermedades Preexistentes y Medicamentos */}
+          <div className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container-high space-y-3">
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[17px] text-error">medical_information</span>
+              <span className="text-xs font-bold text-primary uppercase tracking-wider">
+                Antecedentes Médicos & Medicación
+              </span>
+            </div>
+
+            {/* Casillas rápidas de enfermedades preexistentes */}
+            <div>
+              <label className="text-[11px] font-bold text-on-surface-variant block mb-1.5">
+                Enfermedades Preexistentes (toca las que apliquen)
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {COMMON_PREEXISTING.map((cond) => {
+                  const active = form.preexistingConditions.includes(cond);
+                  return (
+                    <button
+                      key={cond}
+                      type="button"
+                      onClick={() => togglePreexisting(cond)}
+                      className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 border ${
+                        active
+                          ? 'bg-error text-white border-error shadow-2xs'
+                          : 'bg-surface-container-lowest text-on-surface-variant border-surface-container-high hover:border-error/40 hover:text-error'
+                      }`}
+                    >
+                      <span>{active ? '✓' : '+'}</span>
+                      <span>{cond}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Otras enfermedades preexistentes o antecedentes */}
+            <div>
+              <label className="text-[11px] font-bold text-on-surface-variant block mb-1">
+                Otras enfermedades preexistentes / Antecedentes (alergias, cirugías...)
+              </label>
+              <input
+                type="text"
+                placeholder="Ej. Hipotiroidismo, alergia al yodo, cirugía de rodilla..."
+                value={form.medicalHistory}
+                onChange={(e) => set('medicalHistory', e.target.value)}
+                className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+
+            {/* Medicamentos actuales */}
+            <div>
+              <label className="text-[11px] font-bold text-on-surface-variant block mb-1">
+                ¿Toma algún medicamento actualmente?
+              </label>
+              <input
+                type="text"
+                placeholder="Ej. Metformina, Losartán, Aspirina (o dejar vacío si ninguno)"
+                value={form.currentMedications}
+                onChange={(e) => set('currentMedications', e.target.value)}
+                className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+
           {/* Notas */}
           <div>
-            <label className="text-xs font-bold text-on-surface-variant block mb-1">Notas Clínicas</label>
+            <label className="text-xs font-bold text-on-surface-variant block mb-1">Notas Clínicas / Observaciones</label>
             <textarea
               rows={2}
               placeholder="Observaciones, preferencias o indicaciones especiales..."
@@ -330,15 +441,17 @@ function ClientFormModal({
             />
           </div>
 
-          {/* Alerta Diabetes */}
+          {/* Alerta Médica en Agenda */}
           <label className="flex items-center gap-2.5 p-3 rounded-xl bg-error-container/20 border border-error/20 cursor-pointer">
             <input
               type="checkbox"
-              checked={form.isDiabetic}
+              checked={form.isDiabetic || form.preexistingConditions.length > 0}
               onChange={(e) => set('isDiabetic', e.target.checked)}
               className="w-4 h-4 rounded text-error focus:ring-error"
             />
-            <span className="text-xs font-bold text-error">Condición de Diabetes Mellitus (activa alerta en agenda)</span>
+            <span className="text-xs font-bold text-error">
+              Activar alerta médica visible en la Agenda (recomendado si tiene diabetes o preexistencias)
+            </span>
           </label>
 
           {/* Submit */}
@@ -471,6 +584,24 @@ export default function ClientesPage() {
         if (!tags.includes(t)) tags.push(t);
       });
 
+    const hasAnyMedicalCondition =
+      form.isDiabetic ||
+      form.preexistingConditions.length > 0 ||
+      Boolean(form.medicalHistory.trim());
+
+    const summaryParts: string[] = [];
+    if (form.preexistingConditions.length > 0) {
+      summaryParts.push(form.preexistingConditions.join(', '));
+    } else if (form.isDiabetic) {
+      summaryParts.push('Diabetes Mellitus');
+    }
+    if (form.medicalHistory.trim()) {
+      summaryParts.push(form.medicalHistory.trim());
+    }
+    if (form.currentMedications.trim()) {
+      summaryParts.push(`Medicación: ${form.currentMedications.trim()}`);
+    }
+
     const payload = {
       name: form.name.trim(),
       phone: form.phone.trim(),
@@ -478,10 +609,16 @@ export default function ClientesPage() {
       birthdate: form.birthdate || '',
       tags,
       totalVisits: editingClient?.totalVisits ?? 1,
-      hasMedicalAlert: form.isDiabetic,
-      medicalAlertDescription: form.isDiabetic
-        ? 'Diabetes Mellitus (protocolo podológico estricto).'
-        : undefined,
+      preexistingConditions: form.preexistingConditions,
+      currentMedications: form.currentMedications.trim() || undefined,
+      medicalHistory: form.medicalHistory.trim() || undefined,
+      hasMedicalAlert: hasAnyMedicalCondition,
+      medicalAlertDescription:
+        summaryParts.length > 0
+          ? summaryParts.join(' • ')
+          : hasAnyMedicalCondition
+          ? 'Diabetes Mellitus (protocolo podológico estricto).'
+          : undefined,
       notes: form.notes.trim() || undefined,
     };
 
@@ -725,13 +862,30 @@ export default function ClientesPage() {
                 </div>
               </div>
 
-              {/* Alerta Médica */}
-              {client.hasMedicalAlert && (
-                <div className="bg-error-container/30 border border-error/20 p-2.5 rounded-xl flex items-center gap-2 text-xs">
-                  <span className="material-symbols-outlined text-[18px] text-error flex-shrink-0">warning</span>
-                  <span className="font-semibold text-on-error-container line-clamp-1">
-                    {client.medicalAlertDescription || 'Alerta médica crítica'}
-                  </span>
+              {/* Alerta Médica / Enfermedades Preexistentes / Medicación */}
+              {(client.hasMedicalAlert ||
+                (client.preexistingConditions && client.preexistingConditions.length > 0) ||
+                client.currentMedications ||
+                client.medicalHistory) && (
+                <div className="bg-error-container/30 border border-error/20 p-2.5 rounded-xl flex flex-col gap-1 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px] text-error flex-shrink-0">warning</span>
+                    <span className="font-bold text-on-error-container line-clamp-1">
+                      {client.preexistingConditions && client.preexistingConditions.length > 0
+                        ? client.preexistingConditions.join(', ')
+                        : client.medicalAlertDescription || 'Alerta médica / antecedente'}
+                    </span>
+                  </div>
+                  {client.medicalHistory && (
+                    <span className="text-[11px] text-on-surface pl-6 line-clamp-1">
+                      <strong>Antecedentes:</strong> {client.medicalHistory}
+                    </span>
+                  )}
+                  {client.currentMedications && (
+                    <span className="text-[11px] text-on-surface pl-6 line-clamp-1">
+                      <strong>Medicación:</strong> {client.currentMedications}
+                    </span>
+                  )}
                 </div>
               )}
 

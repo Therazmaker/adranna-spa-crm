@@ -386,7 +386,7 @@ export const dbService = {
       avatar_url: client.avatarUrl || null,
       tags: client.tags || [],
       total_visits: client.totalVisits || 1,
-      notes: client.notes || null,
+      notes: encodeClientNotes(client),
       has_medical_alert: client.hasMedicalAlert || false,
       medical_alert_description: client.medicalAlertDescription || null,
     };
@@ -456,9 +456,21 @@ export const dbService = {
     if (
       updates.notes !== undefined ||
       updates.reminderDate !== undefined ||
-      updates.reminderMessage !== undefined
+      updates.reminderMessage !== undefined ||
+      updates.preexistingConditions !== undefined ||
+      updates.currentMedications !== undefined ||
+      updates.medicalHistory !== undefined
     ) {
-      const target = updatedLocal || ({ notes: updates.notes, reminderDate: updates.reminderDate, reminderMessage: updates.reminderMessage } as Client);
+      const target =
+        updatedLocal ||
+        ({
+          notes: updates.notes,
+          reminderDate: updates.reminderDate,
+          reminderMessage: updates.reminderMessage,
+          preexistingConditions: updates.preexistingConditions,
+          currentMedications: updates.currentMedications,
+          medicalHistory: updates.medicalHistory,
+        } as Client);
       payload.notes = encodeClientNotes(target);
     }
     if (updates.hasMedicalAlert !== undefined)         payload.has_medical_alert = updates.hasMedicalAlert;
@@ -1436,6 +1448,15 @@ function encodeClientNotes(c: Partial<Client>): string | null {
   const meta: Record<string, unknown> = {};
   if (c.reminderDate) meta.reminderDate = c.reminderDate;
   if (c.reminderMessage) meta.reminderMessage = c.reminderMessage;
+  if (c.preexistingConditions && c.preexistingConditions.length > 0) {
+    meta.preexistingConditions = c.preexistingConditions;
+  }
+  if (c.currentMedications && c.currentMedications.trim()) {
+    meta.currentMedications = c.currentMedications.trim();
+  }
+  if (c.medicalHistory && c.medicalHistory.trim()) {
+    meta.medicalHistory = c.medicalHistory.trim();
+  }
   const hasMeta = Object.keys(meta).length > 0;
   if (!cleanNotes && !hasMeta) return null;
   return `${cleanNotes || ''}${hasMeta ? `${META_MARKER}${JSON.stringify(meta)}${META_END}` : ''}`;
@@ -1459,7 +1480,13 @@ function encodeAptNotes(a: Partial<Appointment>): string | null {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapClient(c: any): Client {
-  const { cleanNotes, meta } = parseMetaFromNotes<{ reminderDate?: string; reminderMessage?: string }>(c.notes);
+  const { cleanNotes, meta } = parseMetaFromNotes<{
+    reminderDate?: string;
+    reminderMessage?: string;
+    preexistingConditions?: string[];
+    currentMedications?: string;
+    medicalHistory?: string;
+  }>(c.notes);
   return {
     id: c.id, name: c.name, phone: c.phone || '', email: c.email || '',
     birthdate: c.birthdate || '', avatarUrl: c.avatar_url || undefined,
@@ -1467,6 +1494,9 @@ function mapClient(c: any): Client {
     lastVisit: c.last_visit, notes: cleanNotes,
     reminderDate: meta.reminderDate,
     reminderMessage: meta.reminderMessage,
+    preexistingConditions: meta.preexistingConditions,
+    currentMedications: meta.currentMedications,
+    medicalHistory: meta.medicalHistory,
     hasMedicalAlert: c.has_medical_alert || false,
     medicalAlertDescription: c.medical_alert_description,
     createdAt: c.created_at,

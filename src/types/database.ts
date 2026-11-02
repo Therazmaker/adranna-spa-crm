@@ -45,6 +45,9 @@ export interface Client {
   nextAppointment?: string;
   reminderDate?: string;
   reminderMessage?: string;
+  preexistingConditions?: string[];
+  currentMedications?: string;
+  medicalHistory?: string;
   notes?: string;
   hasMedicalAlert?: boolean;
   medicalAlertDescription?: string;
