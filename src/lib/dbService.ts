@@ -563,7 +563,13 @@ export const dbService = {
 
   async getAppointments(): Promise<Appointment[]> {
     if (!isSupabaseConfigured()) return INITIAL_APPOINTMENTS;
-    const cached = readLocal<Appointment[]>('adranna_appointments', []);
+    const cached = readLocal<Appointment[]>('adranna_appointments', []).map((a) => {
+      const isMasaje = a.discipline === 'masaje' || /masaj|corporal|relaj|descontract|piedras|reduct/i.test(a.serviceName || '');
+      return {
+        ...a,
+        discipline: (isMasaje ? 'masaje' : (a.discipline || 'podologia')) as 'podologia' | 'masaje',
+      };
+    });
 
     if (isBrowserOnline()) {
       await this.syncPendingQueue();
@@ -1513,10 +1519,15 @@ function mapAppointment(a: any): Appointment {
     paymentMethod?: Appointment['paymentMethod'];
     blockColor?: string;
   }>(a.notes);
+
+  const rawDiscipline = a.discipline;
+  const isMasaje = rawDiscipline === 'masaje' || /masaj|corporal|relaj|descontract|piedras|reduct/i.test(a.service_name || '');
+  const discipline: 'podologia' | 'masaje' = isMasaje ? 'masaje' : 'podologia';
+
   return {
     id: a.id, clientId: a.client_id, clientName: a.client_name,
     clientPhone: a.client_phone || '', professionalName: a.professional_name,
-    professionalRole: a.professional_role || '', discipline: a.discipline,
+    professionalRole: a.professional_role || '', discipline,
     cabinId: 'cab-1', cabinName: a.cabin_name, serviceName: a.service_name,
     durationMinutes: a.duration_minutes || 45, price: Number(a.price) || 0,
     servicePrice: meta.servicePrice,
@@ -1534,10 +1545,13 @@ function mapAppointment(a: any): Appointment {
 }
 
 function aptToRow(apt: Partial<Appointment>): Record<string, unknown> {
+  const isMasaje = apt.discipline === 'masaje' || /masaj|corporal|relaj|descontract|piedras|reduct/i.test(apt.serviceName || '');
+  const discipline = isMasaje ? 'masaje' : (apt.discipline || 'podologia');
+
   return {
     client_id: apt.clientId, client_name: apt.clientName, client_phone: apt.clientPhone,
     professional_name: apt.professionalName, professional_role: apt.professionalRole,
-    discipline: apt.discipline, cabin_name: apt.cabinName, service_name: apt.serviceName,
+    discipline, cabin_name: apt.cabinName, service_name: apt.serviceName,
     duration_minutes: apt.durationMinutes, price: apt.price, status: apt.status,
     appointment_date: apt.date, appointment_time: apt.time,
     has_medical_alert: apt.hasMedicalAlert, medical_alert_text: apt.medicalAlertText,

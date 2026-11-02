@@ -59,7 +59,9 @@ export default function AppointmentBottomSheet({
     setTimeout(() => setSavedToast(false), 2200);
   };
 
-  const isPodology = appointment.discipline === 'podologia';
+  const isPodology =
+    appointment.discipline === 'podologia' &&
+    !/masaj|corporal|relaj|descontract|piedras|reduct/i.test(appointment.serviceName || '');
   const soldProducts = appointment.soldProducts || [];
 
   const statusConfig: Record<Appointment['status'], { label: string; color: string }> = {

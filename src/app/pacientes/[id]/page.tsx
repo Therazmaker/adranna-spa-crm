@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { dbService } from '@/lib/dbService';
 import { Appointment, Client } from '@/types/database';
+import { formatTime12 } from '@/lib/timeUtils';
 
 function addDaysToToday(days: number): string {
   const d = new Date();

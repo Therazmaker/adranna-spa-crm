@@ -127,8 +127,18 @@ export default function NewAppointmentModal({
     if (found) {
       setPrice(found.price ? String(found.price) : '');
       setDuration(String(found.durationMinutes || 45));
-      if (found.category === 'podologia' || found.category === 'masaje' || found.category === 'manicura') {
+      if (found.category === 'podologia' || found.category === 'masaje') {
         setDiscipline(found.category);
+      } else if (/masaj|corporal|relaj|descontract|piedras|reduct/i.test(found.name)) {
+        setDiscipline('masaje');
+      } else if (/podo|pie|uña|call|quiropod/i.test(found.name)) {
+        setDiscipline('podologia');
+      }
+    } else {
+      if (/masaj|corporal|relaj|descontract|piedras|reduct/i.test(val)) {
+        setDiscipline('masaje');
+      } else if (/podo|pie|uña|call|quiropod/i.test(val)) {
+        setDiscipline('podologia');
       }
     }
   };
@@ -139,6 +149,11 @@ export default function NewAppointmentModal({
     const found = professionalsList.find((p) => p.name === nameVal);
     if (found) {
       setProfRole(found.role);
+      if (/masaj|masoterap/i.test(found.role || '') && !/podo|pie|uña|quiropod/i.test(serviceName)) {
+        setDiscipline('masaje');
+      } else if (/podo/i.test(found.role || '') && !/masaj|relaj|corporal/i.test(serviceName)) {
+        setDiscipline('podologia');
+      }
     }
   };
 
@@ -288,7 +303,15 @@ export default function NewAppointmentModal({
                     type="text"
                     placeholder="O escribe un tratamiento personalizado..."
                     value={serviceName}
-                    onChange={(e) => setServiceName(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setServiceName(val);
+                      if (/masaj|corporal|relaj|descontract|piedras|reduct/i.test(val)) {
+                        setDiscipline('masaje');
+                      } else if (/podo|pie|uña|call|quiropod/i.test(val)) {
+                        setDiscipline('podologia');
+                      }
+                    }}
                     className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface"
                   />
                 </div>
@@ -300,7 +323,15 @@ export default function NewAppointmentModal({
                   required
                   placeholder="Ej. Quiropodia Integral / Masaje Descontracturante / Manicura Spa"
                   value={serviceName}
-                  onChange={(e) => setServiceName(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setServiceName(val);
+                    if (/masaj|corporal|relaj|descontract|piedras|reduct/i.test(val)) {
+                      setDiscipline('masaje');
+                    } else if (/podo|pie|uña|call|quiropod/i.test(val)) {
+                      setDiscipline('podologia');
+                    }
+                  }}
                   className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-sm font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 <span className="text-[10px] text-outline mt-1 block">
@@ -308,6 +339,38 @@ export default function NewAppointmentModal({
                 </span>
               </div>
             )}
+
+            {/* Selector visible de Disciplina */}
+            <div className="flex items-center justify-between bg-surface-container-low p-2 rounded-xl border border-surface-container-high mt-1.5">
+              <span className="text-[11px] font-bold text-on-surface-variant flex items-center gap-1">
+                <span className="material-symbols-outlined text-[15px] text-primary">category</span>
+                Especialidad de la cita:
+              </span>
+              <div className="inline-flex rounded-lg bg-surface-container-high p-0.5 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setDiscipline('podologia')}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                    discipline === 'podologia'
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'text-on-surface-variant hover:text-primary'
+                  }`}
+                >
+                  Podología
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDiscipline('masaje')}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                    discipline === 'masaje'
+                      ? 'bg-secondary text-white shadow-xs'
+                      : 'text-on-surface-variant hover:text-secondary'
+                  }`}
+                >
+                  Masajes / Spa
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* 3. Profesional */}

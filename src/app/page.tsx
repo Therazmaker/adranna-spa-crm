@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [finalizingAppointment, setFinalizingAppointment] = useState<Appointment | null>(null);
   const [filterDiscipline, setFilterDiscipline] = useState<'all' | 'podologia' | 'masaje'>('all');
+  const [dateScope, setDateScope] = useState<'hoy' | 'proximas' | 'todas'>('hoy');
   const [statusTab, setStatusTab] = useState<'activas' | 'finalizadas'>('activas');
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
   const [deletingAptId, setDeletingAptId] = useState<string | null>(null);
@@ -49,26 +50,52 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayApts = appointments.filter((a) => a.date === todayStr || !a.date);
+  const getDiscipline = (apt: Appointment): 'podologia' | 'masaje' => {
+    if (apt.discipline === 'masaje') return 'masaje';
+    if (/masaj|corporal|relaj|descontract|piedras|reduct/i.test(apt.serviceName || '')) return 'masaje';
+    return 'podologia';
+  };
+
+  const getTodayDateStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const todayStr = getTodayDateStr();
+  const todayApts = appointments.filter((a) => (a.date || todayStr) === todayStr);
 
   const byDiscipline = appointments.filter((apt) => {
     if (filterDiscipline === 'all') return true;
-    return apt.discipline === filterDiscipline;
+    return getDiscipline(apt) === filterDiscipline;
   });
 
-  const activeAppointments = byDiscipline.filter(
+  const countHoy = byDiscipline.filter((a) => (a.date || todayStr) === todayStr).length;
+  const countProximas = byDiscipline.filter((a) => (a.date || todayStr) >= todayStr).length;
+  const countTodas = byDiscipline.length;
+
+  const byDateScope = byDiscipline.filter((apt) => {
+    if (dateScope === 'todas') return true;
+    const d = apt.date || todayStr;
+    if (dateScope === 'hoy') return d === todayStr;
+    if (dateScope === 'proximas') return d >= todayStr;
+    return true;
+  });
+
+  const activeAppointments = byDateScope.filter(
     (apt) => apt.status !== 'completado' && apt.status !== 'cancelado'
   );
-  const completedAppointments = byDiscipline.filter(
+  const completedAppointments = byDateScope.filter(
     (apt) => apt.status === 'completado' || apt.status === 'cancelado'
   );
   const filteredAppointments =
     statusTab === 'activas' ? activeAppointments : completedAppointments;
 
   const todayRevenue = todayApts.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
-  const podoCount = todayApts.filter((a) => a.discipline === 'podologia').length;
-  const masajeCount = todayApts.filter((a) => a.discipline === 'masaje').length;
+  const podoCount = todayApts.filter((a) => getDiscipline(a) === 'podologia').length;
+  const masajeCount = todayApts.filter((a) => getDiscipline(a) === 'masaje').length;
 
   const handleAddAppointment = (newApt: Appointment) => {
     setAppointments((prev) => [newApt, ...prev]);
@@ -299,16 +326,24 @@ export default function DashboardPage() {
 
       {/* Cronograma de Citas */}
       <section className="flex flex-col gap-3 pt-2">
-        <div className="flex items-center justify-between px-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
           <div>
             <h2 className="font-serif text-xl text-primary font-bold">Citas & Agenda</h2>
             <span className="text-xs text-on-surface-variant">
               {isLoading
                 ? 'Cargando citas...'
-                : `${activeAppointments.length} por atender · ${completedAppointments.length} finalizadas`}
+                : `${activeAppointments.length} por atender · ${completedAppointments.length} finalizadas (${
+                    dateScope === 'hoy'
+                      ? 'Hoy'
+                      : dateScope === 'proximas'
+                      ? 'Próximas citas'
+                      : 'Todas las fechas'
+                  })`}
             </span>
           </div>
-          <div className="flex items-center gap-1 bg-surface-container-high p-1 rounded-xl text-xs font-semibold">
+
+          {/* Filtro de Especialidad */}
+          <div className="flex items-center gap-1 bg-surface-container-high p-1 rounded-xl text-xs font-semibold self-start sm:self-auto">
             <button
               onClick={() => setFilterDiscipline('all')}
               className={`px-3 py-1 rounded-lg transition-all ${
@@ -340,6 +375,56 @@ export default function DashboardPage() {
               Masajes
             </button>
           </div>
+        </div>
+
+        {/* Selector de Alcance de Fecha: Hoy / Próximas / Todas */}
+        <div className="flex items-center justify-between bg-surface-container-low p-1.5 rounded-2xl border border-surface-container-high gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setDateScope('hoy')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                dateScope === 'hoy'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">today</span>
+              <span>Hoy ({countHoy})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateScope('proximas')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                dateScope === 'proximas'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">upcoming</span>
+              <span>Próximas ({countProximas})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateScope('todas')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                dateScope === 'todas'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">event_note</span>
+              <span>Todas ({countTodas})</span>
+            </button>
+          </div>
+
+          <span className="text-[11px] font-semibold text-outline hidden md:inline pr-2">
+            {dateScope === 'hoy'
+              ? 'Mostrando citas de hoy'
+              : dateScope === 'proximas'
+              ? 'Citas de hoy en adelante'
+              : 'Historial completo de citas'}
+          </span>
         </div>
 
         {/* Pestañas: Por Atender vs Finalizadas */}
@@ -425,8 +510,10 @@ export default function DashboardPage() {
         ) : (
           <div className="flex flex-col gap-3">
             {filteredAppointments.map((apt) => {
-              const isPodo = apt.discipline === 'podologia';
+              const aptDiscipline = getDiscipline(apt);
+              const isPodo = aptDiscipline === 'podologia';
               const isCompleted = apt.status === 'completado';
+              const isToday = (apt.date || todayStr) === todayStr;
               return (
                 <article
                   key={apt.id}
@@ -457,7 +544,7 @@ export default function DashboardPage() {
                           </span>
 
                           <span className="text-xs text-outline font-medium">
-                            {apt.date || 'Hoy'}
+                            {isToday ? 'Hoy' : apt.date}
                           </span>
 
                           {apt.status === 'en_curso' && (
