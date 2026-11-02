@@ -91,7 +91,7 @@ export default function Navbar({ title, showBack = false }: NavbarProps) {
 
   return (
     <header className="fixed top-0 w-full z-50 pt-safe bg-surface/90 backdrop-blur-xl border-b border-surface-container-high/60 shadow-xs">
-      <div className="h-16 px-gutter-mobile flex items-center justify-between max-w-7xl mx-auto w-full">
+      <div className="h-16 px-3 sm:px-6 md:px-8 flex items-center justify-between w-full">
         <div className="flex items-center gap-space-sm">
           {showBack ? (
             <button

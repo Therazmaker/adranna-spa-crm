@@ -34,7 +34,7 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Navbar />
-      <main className="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-surface max-w-7xl mx-auto px-gutter-mobile">
+      <main className="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-surface px-3 sm:px-6 md:px-8">
         {children}
       </main>
       <BottomNav />
