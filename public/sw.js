@@ -1,13 +1,10 @@
 // Adranna Spa CRM Service Worker for PWA
-const CACHE_NAME = 'adranna-crm-v1';
+const CACHE_NAME = 'adranna-crm-v3';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll([
-        '/',
-        '/manifest.json'
-      ]);
+      return cache.addAll(['/manifest.json']);
     })
   );
   self.skipWaiting();

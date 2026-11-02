@@ -60,15 +60,12 @@ export default function NewAppointmentModal({
   const [blockColor, setBlockColor] = useState(BLOCK_COLOR_PALETTE[0].id);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Prellenar únicamente al abrir el modal o cambiar la cita que se edita
   useEffect(() => {
-    if (isOpen) {
-      dbService.getProfessionals().then(setProfessionalsList);
-      dbService.getServices().then(setServicesList);
-    }
-  }, [isOpen]);
+    if (!isOpen) return;
 
-  // Prellenar al abrir o editar
-  useEffect(() => {
+    let active = true;
+
     if (editingAppointment) {
       setSelectedClientId(editingAppointment.clientId);
       setDiscipline((editingAppointment.discipline as 'podologia' | 'masaje' | 'manicura') || 'podologia');
@@ -83,35 +80,44 @@ export default function NewAppointmentModal({
       setNotes(editingAppointment.notes || '');
       setBlockColor(editingAppointment.blockColor || BLOCK_COLOR_PALETTE[0].id);
     } else {
-      setSelectedClientId(clients[0]?.id || '');
+      setSelectedClientId((prev) => prev || clients[0]?.id || '');
       setDiscipline('podologia');
       setTime(defaultTime || '10:00');
       setDate(defaultDate || todayStr());
       setCabin('Cabina 1');
       setNotes('');
       setBlockColor(BLOCK_COLOR_PALETTE[0].id);
-
-      // Auto-seleccionar primer profesional disponible si existe
-      if (professionalsList.length > 0) {
-        setProfessional(professionalsList[0].name);
-        setProfRole(professionalsList[0].role);
-      } else {
-        setProfessional('');
-        setProfRole('');
-      }
-
-      // Auto-seleccionar primer servicio si existe
-      if (servicesList.length > 0) {
-        setServiceName(servicesList[0].name);
-        setPrice(servicesList[0].price ? String(servicesList[0].price) : '');
-        setDuration(String(servicesList[0].durationMinutes || 45));
-      } else {
-        setServiceName('');
-        setPrice('');
-        setDuration('45');
-      }
+      setServiceName('');
+      setPrice('');
+      setDuration('45');
+      setProfessional('');
+      setProfRole('');
     }
-  }, [editingAppointment, clients, isOpen, professionalsList, servicesList, defaultDate, defaultTime]);
+
+    Promise.all([dbService.getProfessionals(), dbService.getServices()]).then(
+      ([profs, srvs]) => {
+        if (!active) return;
+        setProfessionalsList(profs);
+        setServicesList(srvs);
+
+        if (!editingAppointment) {
+          if (profs.length > 0) {
+            setProfessional((prev) => prev || profs[0].name);
+            setProfRole((prev) => prev || profs[0].role);
+          }
+          if (srvs.length > 0) {
+            setServiceName((prev) => prev || srvs[0].name);
+            setPrice((prev) => (prev !== '' ? prev : srvs[0].price ? String(srvs[0].price) : ''));
+            setDuration((prev) => (prev !== '45' ? prev : String(srvs[0].durationMinutes || 45)));
+          }
+        }
+      }
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen, editingAppointment, defaultDate, defaultTime]);
 
   // Cuando cambia el servicio seleccionado en el dropdown
   const handleServiceSelect = (val: string) => {
@@ -374,12 +380,18 @@ export default function NewAppointmentModal({
                 Precio (S/ PEN)
               </label>
               <input
-                type="number"
-                min={0}
-                step="any"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
                 placeholder="Ej. 80"
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => {
+                  const cleaned = e.target.value
+                    .replace(/[^0-9.]/g, '')
+                    .replace(/^0+(?=\d)/, '');
+                  setPrice(cleaned);
+                }}
                 className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
