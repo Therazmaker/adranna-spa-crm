@@ -6,6 +6,7 @@ import { Appointment, Client, Professional } from '@/types/database';
 import AppointmentBottomSheet from '@/components/AppointmentBottomSheet';
 import NewAppointmentModal, { BLOCK_COLOR_PALETTE } from '@/components/NewAppointmentModal';
 import FinalizeSessionModal from '@/components/FinalizeSessionModal';
+import { formatTime12, formatHourSlot12 } from '@/lib/timeUtils';
 
 type ViewMode = 'calendar' | 'list';
 type CalendarRange = 'dia' | 'semana' | 'quincena' | 'mensual';
@@ -608,8 +609,8 @@ export default function AgendaPage() {
                   {HOURS.map((hour) => (
                     <tr key={hour} className="group/row hover:bg-surface-container-low/30">
                       {/* Columna fija de hora tipo hoja de cálculo */}
-                      <td className="py-2 px-2 text-center font-mono text-xs font-bold text-on-surface-variant border-r border-surface-container-high bg-surface-container-low/60 sticky left-0 z-10">
-                        {hour}
+                      <td className="py-2 px-2 text-center font-mono text-xs font-bold text-on-surface-variant border-r border-surface-container-high bg-surface-container-low/60 sticky left-0 z-10 whitespace-nowrap">
+                        {formatHourSlot12(hour)}
                       </td>
 
                       {/* Celdas por cada día */}
@@ -664,7 +665,7 @@ export default function AgendaPage() {
                                   >
                                     <div className="flex items-center justify-between gap-1">
                                       <span className="text-[10px] font-bold opacity-95 truncate">
-                                        {apt.time} · {apt.clientName}
+                                        {formatTime12(apt.time)} · {apt.clientName}
                                       </span>
                                       {isDone && (
                                         <span className="material-symbols-outlined text-[12px] flex-shrink-0">
@@ -758,9 +759,9 @@ export default function AgendaPage() {
                                 }}
                                 style={{ backgroundColor: bgColor }}
                                 className="px-1.5 py-1 rounded text-[10px] text-white font-semibold truncate shadow-2xs hover:brightness-110"
-                                title={`${apt.time} - ${apt.clientName} (${apt.serviceName})`}
+                                title={`${formatTime12(apt.time)} - ${apt.clientName} (${apt.serviceName})`}
                               >
-                                {apt.time} {apt.clientName}
+                                {formatTime12(apt.time)} {apt.clientName}
                               </div>
                             );
                           })}
@@ -813,9 +814,9 @@ export default function AgendaPage() {
               const blockColor = getBlockColor(apt);
               return (
                 <div key={apt.id} className="flex gap-3 items-start">
-                  <div className="w-14 flex-shrink-0 text-right pt-2">
-                    <span className="text-sm font-bold text-on-surface font-serif block">
-                      {apt.time}
+                  <div className="w-16 flex-shrink-0 text-right pt-2">
+                    <span className="text-xs font-bold text-on-surface font-serif block whitespace-nowrap">
+                      {formatTime12(apt.time)}
                     </span>
                     <span className="text-[10px] text-outline font-semibold">
                       {apt.date?.slice(5) || ''}

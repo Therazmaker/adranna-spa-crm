@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Appointment } from '@/types/database';
 import { BLOCK_COLOR_PALETTE } from '@/components/NewAppointmentModal';
+import { formatTime12 } from '@/lib/timeUtils';
 import { dbService } from '@/lib/dbService';
 
 interface AppointmentBottomSheetProps {
@@ -159,7 +160,7 @@ export default function AppointmentBottomSheet({
             <div className="min-w-0">
               <span className="block text-[11px] text-outline font-medium">Fecha / Hora</span>
               <span className="text-xs font-bold text-on-surface block">
-                {appointment.date || 'Hoy'} · {appointment.time}
+                {appointment.date || 'Hoy'} · {formatTime12(appointment.time)}
               </span>
               <span className="text-[10px] text-secondary font-semibold">
                 {appointment.durationMinutes} min · {appointment.cabinName}

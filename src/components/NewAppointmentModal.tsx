@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Appointment, Client, Professional, ServicePackage } from '@/types/database';
 import { dbService } from '@/lib/dbService';
+import { formatTime12, getTimeOptions12 } from '@/lib/timeUtils';
 
 export const BLOCK_COLOR_PALETTE = [
   { id: '#7A4F3A', label: 'Terracota Spa' },
@@ -415,12 +416,23 @@ export default function NewAppointmentModal({
               <label className="text-xs font-semibold text-on-surface-variant block">
                 Hora
               </label>
-              <input
-                type="time"
+              <select
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface"
-              />
+                className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {getTimeOptions12().map((opt) => (
+                  <option key={opt.value24} value={opt.value24}>
+                    {opt.label12}
+                  </option>
+                ))}
+                {/* Si la hora viene fuera de las opciones estándar */}
+                {!getTimeOptions12().some((o) => o.value24 === time) && time && (
+                  <option value={time}>
+                    {formatTime12(time)}
+                  </option>
+                )}
+              </select>
             </div>
 
             <div className="space-y-1">

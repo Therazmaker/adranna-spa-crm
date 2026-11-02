@@ -7,6 +7,7 @@ import { Appointment, Client, Professional, ServicePackage } from '@/types/datab
 import AppointmentBottomSheet from '@/components/AppointmentBottomSheet';
 import NewAppointmentModal from '@/components/NewAppointmentModal';
 import FinalizeSessionModal from '@/components/FinalizeSessionModal';
+import { formatTime12 } from '@/lib/timeUtils';
 import { useAuth } from '@/context/AuthContext';
 
 export default function DashboardPage() {
@@ -493,11 +494,11 @@ export default function DashboardPage() {
 
                       <div className="text-right flex-shrink-0">
                         <span
-                          className={`font-serif text-lg font-bold block ${
+                          className={`font-serif text-base font-bold block whitespace-nowrap ${
                             isPodo ? 'text-primary' : 'text-secondary'
                           }`}
                         >
-                          {apt.time}
+                          {formatTime12(apt.time)}
                         </span>
                         <span className="text-[11px] text-outline font-medium">
                           {apt.durationMinutes} min
