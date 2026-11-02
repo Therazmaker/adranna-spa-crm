@@ -35,7 +35,7 @@ export default function FinalizeSessionModal({
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [newProdName, setNewProdName] = useState('');
   const [newProdPres, setNewProdPres] = useState('30 ml');
-  const [newProdPrice, setNewProdPrice] = useState<number>(35);
+  const [newProdPrice, setNewProdPrice] = useState<string>('35');
 
   useEffect(() => {
     if (appointment) {
@@ -416,8 +416,9 @@ export default function FinalizeSessionModal({
                         type="number"
                         step="0.5"
                         min="0"
+                        placeholder="0"
                         value={newProdPrice}
-                        onChange={(e) => setNewProdPrice(Number(e.target.value))}
+                        onChange={(e) => setNewProdPrice(e.target.value)}
                         className="w-24 bg-surface-container-low border border-surface-container-high rounded-lg px-2 py-1 text-xs font-bold text-primary"
                       />
                     </div>

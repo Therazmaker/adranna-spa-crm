@@ -54,8 +54,8 @@ export default function NewAppointmentModal({
   const [cabin, setCabin] = useState('Cabina 1');
   const [professional, setProfessional] = useState('');
   const [profRole, setProfRole] = useState('');
-  const [price, setPrice] = useState(0);
-  const [duration, setDuration] = useState(45);
+  const [price, setPrice] = useState<string>('');
+  const [duration, setDuration] = useState<string>('45');
   const [notes, setNotes] = useState('');
   const [blockColor, setBlockColor] = useState(BLOCK_COLOR_PALETTE[0].id);
   const [isSaving, setIsSaving] = useState(false);
@@ -78,8 +78,8 @@ export default function NewAppointmentModal({
       setCabin(editingAppointment.cabinName);
       setProfessional(editingAppointment.professionalName);
       setProfRole(editingAppointment.professionalRole || '');
-      setPrice(editingAppointment.price);
-      setDuration(editingAppointment.durationMinutes);
+      setPrice(editingAppointment.price ? String(editingAppointment.price) : '');
+      setDuration(String(editingAppointment.durationMinutes || 45));
       setNotes(editingAppointment.notes || '');
       setBlockColor(editingAppointment.blockColor || BLOCK_COLOR_PALETTE[0].id);
     } else {
@@ -103,12 +103,12 @@ export default function NewAppointmentModal({
       // Auto-seleccionar primer servicio si existe
       if (servicesList.length > 0) {
         setServiceName(servicesList[0].name);
-        setPrice(servicesList[0].price);
-        setDuration(servicesList[0].durationMinutes);
+        setPrice(servicesList[0].price ? String(servicesList[0].price) : '');
+        setDuration(String(servicesList[0].durationMinutes || 45));
       } else {
         setServiceName('');
-        setPrice(0);
-        setDuration(45);
+        setPrice('');
+        setDuration('45');
       }
     }
   }, [editingAppointment, clients, isOpen, professionalsList, servicesList, defaultDate, defaultTime]);
@@ -118,8 +118,8 @@ export default function NewAppointmentModal({
     setServiceName(val);
     const found = servicesList.find((s) => s.name === val);
     if (found) {
-      setPrice(found.price);
-      setDuration(found.durationMinutes);
+      setPrice(found.price ? String(found.price) : '');
+      setDuration(String(found.durationMinutes || 45));
       if (found.category === 'podologia' || found.category === 'masaje' || found.category === 'manicura') {
         setDiscipline(found.category);
       }
@@ -153,6 +153,9 @@ export default function NewAppointmentModal({
 
     setIsSaving(true);
 
+    const numericPrice = Number(price) || 0;
+    const numericDuration = Number(duration) || 45;
+
     const base = {
       clientId: client.id,
       clientName: client.name,
@@ -163,9 +166,9 @@ export default function NewAppointmentModal({
       cabinId: 'cab-1',
       cabinName: cabin.trim(),
       serviceName: serviceName.trim(),
-      durationMinutes: duration,
-      price,
-      servicePrice: editingAppointment?.servicePrice ?? price,
+      durationMinutes: numericDuration,
+      price: numericPrice,
+      servicePrice: editingAppointment?.servicePrice ?? numericPrice,
       soldProducts: editingAppointment?.soldProducts,
       productsTotal: editingAppointment?.productsTotal,
       blockColor,
@@ -373,8 +376,10 @@ export default function NewAppointmentModal({
               <input
                 type="number"
                 min={0}
+                step="any"
+                placeholder="Ej. 80"
                 value={price}
-                onChange={(e) => setPrice(Number(e.target.value))}
+                onChange={(e) => setPrice(e.target.value)}
                 className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -412,10 +417,11 @@ export default function NewAppointmentModal({
               </label>
               <input
                 type="number"
-                min={15}
+                min={5}
                 step={5}
+                placeholder="45"
                 value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
+                onChange={(e) => setDuration(e.target.value)}
                 className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-2.5 text-xs font-semibold text-on-surface"
               />
             </div>
