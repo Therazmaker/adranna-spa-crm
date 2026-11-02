@@ -190,28 +190,6 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {/* Banner de Consentimientos Pendientes si los hay */}
-      {appointments.some((a) => a.hasPendingConsent) && (
-        <div className="flex items-start gap-3 p-3.5 rounded-2xl bg-secondary-container/40 text-on-secondary-container shadow-xs border border-secondary/20 transition-all">
-          <div className="flex-shrink-0 w-9 h-9 rounded-full bg-secondary-fixed flex items-center justify-center text-secondary shadow-xs">
-            <span className="material-symbols-outlined text-[20px]">draw</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between gap-1">
-              <p className="text-xs sm:text-sm font-bold text-secondary">
-                Consentimiento Digital Pendiente
-              </p>
-              <span className="px-2 py-0.5 rounded-full bg-secondary text-white text-[10px] font-bold">
-                {appointments.filter((a) => a.hasPendingConsent).length} firma(s) requeridas
-              </span>
-            </div>
-            <p className="text-xs text-on-secondary-container/90 mt-0.5">
-              {appointments.filter((a) => a.hasPendingConsent).map((a) => a.clientName).join(', ')} — firma pendiente antes de iniciar procedimiento.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Acciones Rápidas */}
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         <button
