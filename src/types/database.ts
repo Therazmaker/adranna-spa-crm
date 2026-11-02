@@ -75,7 +75,8 @@ export interface Appointment {
   hasMedicalAlert?: boolean;
   medicalAlertText?: string;
   hasPendingConsent?: boolean;
-  notes?: string;
+  notes?: string; // OBSERVACIONES (hallazgos clínicos de la sesión)
+  procedure?: string; // PROCEDIMIENTO (qué se le realizó y recomendaciones)
 }
 
 export interface FootFinding {

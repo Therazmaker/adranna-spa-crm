@@ -27,6 +27,7 @@ export default function FinalizeSessionModal({
   const [cart, setCart] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [sessionNotes, setSessionNotes] = useState('');
+  const [sessionProcedure, setSessionProcedure] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -42,6 +43,7 @@ export default function FinalizeSessionModal({
       setCart({});
       setSearchQuery('');
       setSessionNotes(appointment.notes || '');
+      setSessionProcedure(appointment.procedure || '');
       setPaymentMethod(appointment.paymentMethod || 'efectivo');
       setShowQuickCreate(false);
       dbService.getInventory().then(setInventory);
@@ -121,7 +123,7 @@ export default function FinalizeSessionModal({
       }
     }
 
-    // 2. Actualizar cita como completada con el desglose de productos, medio de pago y notas
+    // 2. Actualizar cita como completada con el desglose de productos, medio de pago, observaciones y procedimiento
     const updates: Partial<Appointment> = {
       status: 'completado',
       servicePrice: baseServicePrice,
@@ -130,6 +132,7 @@ export default function FinalizeSessionModal({
       price: totalPrice,
       paymentMethod,
       notes: sessionNotes.trim() || undefined,
+      procedure: sessionProcedure.trim() || undefined,
     };
 
     await dbService.updateAppointment(appointment.id, updates);
@@ -169,7 +172,7 @@ export default function FinalizeSessionModal({
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-surface-container-lowest rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-5 pb-8 sm:pb-5 shadow-2xl border border-surface-container-high space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface-container-lowest rounded-t-3xl sm:rounded-3xl w-full max-w-2xl p-5 pb-8 sm:pb-5 shadow-2xl border border-surface-container-high space-y-4 max-h-[92vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-2 border-b border-surface-container-high">
           <div className="flex items-center gap-2.5">
@@ -194,8 +197,8 @@ export default function FinalizeSessionModal({
           </button>
         </div>
 
-        {/* Resumen Servicio + Motivo / Observaciones para el Perfil del Cliente */}
-        <div className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container-high space-y-2.5">
+        {/* Resumen Servicio + Ficha Clínica (FECHA | OBSERVACIONES | PROCEDIMIENTO) */}
+        <div className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container-high space-y-3">
           <div className="flex items-center justify-between text-xs">
             <span className="text-on-surface-variant font-medium">
               Atendido por: <strong className="text-on-surface">{appointment.professionalName}</strong> ({appointment.date} · {appointment.time})
@@ -205,17 +208,97 @@ export default function FinalizeSessionModal({
             </span>
           </div>
 
-          <div>
-            <label className="text-[11px] font-bold text-on-surface-variant block mb-1">
-              Motivo / Qué se le realizó en esta visita (se guardará en el perfil del cliente):
-            </label>
-            <input
-              type="text"
-              placeholder="Ej. Profilaxis podológica, extracción de espícula, masaje cervical..."
-              value={sessionNotes}
-              onChange={(e) => setSessionNotes(e.target.value)}
-              className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl px-3 py-2 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
-            />
+          {/* Tabla Estilo Ficha Clínica Física: FECHA | OBSERVACIONES | PROCEDIMIENTO */}
+          <div className="rounded-xl border-2 border-on-surface/20 overflow-hidden bg-surface-container-lowest shadow-2xs">
+            <div className="grid grid-cols-1 sm:grid-cols-12 bg-surface-container-high/80 border-b-2 border-on-surface/20 text-[11px] font-extrabold uppercase tracking-wider text-on-surface text-center">
+              <div className="sm:col-span-2 py-2 px-2 border-b sm:border-b-0 sm:border-r border-on-surface/20 flex items-center justify-center">
+                FECHA
+              </div>
+              <div className="sm:col-span-5 py-2 px-3 border-b sm:border-b-0 sm:border-r border-on-surface/20 flex items-center justify-center">
+                OBSERVACIONES
+              </div>
+              <div className="sm:col-span-5 py-2 px-3 flex items-center justify-center">
+                PROCEDIMIENTO
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-12 divide-y sm:divide-y-0 sm:divide-x divide-on-surface/20">
+              {/* Columna FECHA */}
+              <div className="sm:col-span-2 p-2.5 flex sm:flex-col items-center justify-center text-center bg-surface-container-low/40">
+                <span className="font-mono text-xs font-bold text-primary">
+                  {appointment.date
+                    ? appointment.date.split('-').reverse().join('/')
+                    : new Date().toLocaleDateString('es-PE')}
+                </span>
+                <span className="text-[10px] text-outline ml-2 sm:ml-0 sm:mt-1 font-semibold">
+                  {appointment.time}
+                </span>
+              </div>
+
+              {/* Columna OBSERVACIONES */}
+              <div className="sm:col-span-5 p-2.5 space-y-1.5">
+                <textarea
+                  rows={4}
+                  placeholder={'• Onicomicosis ambos 1er dedo\n• Helomas sobre los 4to y 5to dedo\n• Helomas en metatarso y talón.'}
+                  value={sessionNotes}
+                  onChange={(e) => setSessionNotes(e.target.value)}
+                  className="w-full bg-surface-container-lowest border border-surface-container-high rounded-lg p-2 text-xs font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary resize-y leading-relaxed"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    '• Onicomicosis 1er dedo',
+                    '• Helomas en dedos/metatarso',
+                    '• Hiperqueratosis plantar',
+                    '• Onicocriptosis',
+                  ].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() =>
+                        setSessionNotes((prev) =>
+                          prev.trim() ? `${prev.trim()}\n${tag}` : tag
+                        )
+                      }
+                      className="px-2 py-0.5 rounded bg-surface-container-high hover:bg-primary/15 text-[10px] font-semibold text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      + {tag.replace('• ', '')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Columna PROCEDIMIENTO */}
+              <div className="sm:col-span-5 p-2.5 space-y-1.5">
+                <textarea
+                  rows={4}
+                  placeholder={'- Profilaxis\n- Se le recomendó ortésicos\n- Des. calzado, antisudoral, ciclopirox'}
+                  value={sessionProcedure}
+                  onChange={(e) => setSessionProcedure(e.target.value)}
+                  className="w-full bg-surface-container-lowest border border-surface-container-high rounded-lg p-2 text-xs font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary resize-y leading-relaxed"
+                />
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    '- Profilaxis',
+                    '- Se le recomendó ortésicos',
+                    '- Des. calzado, antisudoral',
+                    '- Deslaminado hiperqueratosis',
+                  ].map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() =>
+                        setSessionProcedure((prev) =>
+                          prev.trim() ? `${prev.trim()}\n${tag}` : tag
+                        )
+                      }
+                      className="px-2 py-0.5 rounded bg-surface-container-high hover:bg-primary/15 text-[10px] font-semibold text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      + {tag.replace('- ', '')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div>

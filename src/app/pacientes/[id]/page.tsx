@@ -39,6 +39,19 @@ export default function PacienteGeneralPage() {
   const [isSavingReminder, setIsSavingReminder] = useState(false);
   const [reminderSavedToast, setReminderSavedToast] = useState(false);
 
+  // Edición rápida en línea de Observaciones y Procedimiento en la tabla
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
+  const [editObs, setEditObs] = useState('');
+  const [editProc, setEditProc] = useState('');
+  const [isSavingVisitEdit, setIsSavingVisitEdit] = useState(false);
+
+  // Agregar registro directo a la tabla clínica (ej. transcribir ficha física)
+  const [showAddManualRow, setShowAddManualRow] = useState(false);
+  const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manualObs, setManualObs] = useState('');
+  const [manualProc, setManualProc] = useState('');
+  const [isSavingManualRow, setIsSavingManualRow] = useState(false);
+
   useEffect(() => {
     let mounted = true;
     Promise.all([dbService.getClients(), dbService.getAppointments()]).then(
@@ -127,6 +140,57 @@ export default function PacienteGeneralPage() {
     setIsSavingReminder(false);
     setReminderSavedToast(true);
     setTimeout(() => setReminderSavedToast(false), 2500);
+  };
+
+  const startEditingVisit = (visit: Appointment) => {
+    setEditingVisitId(visit.id);
+    setEditObs(visit.notes || '');
+    setEditProc(visit.procedure || visit.serviceName || '');
+  };
+
+  const handleSaveVisitEdit = async (visitId: string) => {
+    setIsSavingVisitEdit(true);
+    const updates: Partial<Appointment> = {
+      notes: editObs.trim() || undefined,
+      procedure: editProc.trim() || undefined,
+    };
+    await dbService.updateAppointment(visitId, updates);
+    setVisits((prev) =>
+      prev.map((v) => (v.id === visitId ? { ...v, ...updates } : v))
+    );
+    setIsSavingVisitEdit(false);
+    setEditingVisitId(null);
+  };
+
+  const handleAddManualClinicalRow = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if ((!manualObs.trim() && !manualProc.trim()) || isSavingManualRow) return;
+    setIsSavingManualRow(true);
+    const created = await dbService.createAppointment({
+      clientId: client.id,
+      clientName: client.name,
+      clientPhone: client.phone || '',
+      professionalName: 'Dra. Adranna',
+      professionalRole: 'Especialista',
+      discipline: 'podologia',
+      cabinId: 'cab-1',
+      cabinName: 'Cabina 1',
+      serviceName: manualProc.split('\n')[0]?.replace(/^[-•]\s*/, '') || 'Atención Clínica',
+      durationMinutes: 45,
+      price: 0,
+      status: 'completado',
+      date: manualDate,
+      time: '10:00',
+      notes: manualObs.trim() || undefined,
+      procedure: manualProc.trim() || undefined,
+    });
+    if (created) {
+      setVisits((prev) => [created, ...prev]);
+    }
+    setManualObs('');
+    setManualProc('');
+    setShowAddManualRow(false);
+    setIsSavingManualRow(false);
   };
 
   const cleanPhone = (client.phone || '').replace(/\D/g, '');
@@ -237,7 +301,7 @@ export default function PacienteGeneralPage() {
         </div>
       </section>
 
-      {/* Historial de Visitas del Cliente */}
+      {/* Historial de Visitas del Cliente — Formato Ficha Clínica: FECHA | OBSERVACIONES | PROCEDIMIENTO */}
       <section className="bg-surface-container-lowest rounded-2xl shadow-xs border border-surface-container-high/60 p-4 sm:p-5 space-y-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
@@ -246,158 +310,332 @@ export default function PacienteGeneralPage() {
             </span>
             <div>
               <h2 className="font-serif text-lg font-bold text-primary">
-                Historial de Visitas & Atenciones
+                Ficha de Evolución & Historial de Visitas
               </h2>
               <p className="text-xs text-on-surface-variant">
-                Registro automático de cada cita, motivo, especialista que lo atendió y productos adquiridos
+                Tabla clínica con Fecha, Observaciones (hallazgos) y Procedimiento realizado en cada atención
               </p>
             </div>
           </div>
 
-          <Link
-            href="/agenda"
-            className="px-3 py-1.5 rounded-xl bg-surface-container-low border border-surface-container-high text-xs font-bold text-primary hover:bg-surface-container transition-colors flex items-center gap-1"
-          >
-            <span className="material-symbols-outlined text-[15px]">calendar_add_on</span>
-            <span>Ir a Agenda</span>
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowAddManualRow((v) => !v)}
+              className="px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold hover:bg-primary-container transition-colors flex items-center gap-1 shadow-2xs"
+            >
+              <span className="material-symbols-outlined text-[15px]">add_circle</span>
+              <span>{showAddManualRow ? 'Cerrar' : '+ Anotar en Ficha'}</span>
+            </button>
+
+            <Link
+              href="/agenda"
+              className="px-3 py-1.5 rounded-xl bg-surface-container-low border border-surface-container-high text-xs font-bold text-primary hover:bg-surface-container transition-colors flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[15px]">calendar_add_on</span>
+              <span>Ir a Agenda</span>
+            </Link>
+          </div>
         </div>
+
+        {/* Formulario rápido para añadir una fila histórica o directa a la ficha */}
+        {showAddManualRow && (
+          <form
+            onSubmit={handleAddManualClinicalRow}
+            className="p-3.5 rounded-2xl bg-surface-container-low border-2 border-primary/30 space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-primary">
+                Agregar fila directa al cuadro clínico de {client.name}
+              </span>
+              <span className="text-[10px] text-outline font-semibold">
+                Ideal para pasar fichas físicas o anotar un control rápido
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+              <div className="sm:col-span-2">
+                <label className="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">
+                  FECHA
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={manualDate}
+                  onChange={(e) => setManualDate(e.target.value)}
+                  className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl px-2.5 py-2 text-xs font-bold text-on-surface"
+                />
+              </div>
+
+              <div className="sm:col-span-5">
+                <label className="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">
+                  OBSERVACIONES (Hallazgos)
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder={'• Onicomicosis ambos 1er dedo\n• Helomas sobre los 4to y 5to dedo\n• Helomas en metatarso y talón.'}
+                  value={manualObs}
+                  onChange={(e) => setManualObs(e.target.value)}
+                  className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-medium text-on-surface"
+                />
+              </div>
+
+              <div className="sm:col-span-5">
+                <label className="text-[10px] font-bold uppercase text-on-surface-variant block mb-1">
+                  PROCEDIMIENTO (Realizado / Recomendación)
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder={'- Profilaxis\n- Se le recomendó ortésicos\n- Des. calzado, antisudoral, ciclopirox'}
+                  value={manualProc}
+                  onChange={(e) => setManualProc(e.target.value)}
+                  className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-medium text-on-surface"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddManualRow(false)}
+                className="px-3 py-1.5 rounded-xl bg-surface-container-high text-xs font-bold text-on-surface-variant"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingManualRow}
+                className="px-4 py-1.5 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800"
+              >
+                {isSavingManualRow ? 'Guardando...' : 'Guardar en Tabla Clínica'}
+              </button>
+            </div>
+          </form>
+        )}
 
         {visits.length === 0 ? (
           <div className="py-10 px-4 text-center rounded-2xl bg-surface-container-low border border-dashed border-surface-container-high space-y-2">
             <span className="material-symbols-outlined text-3xl text-outline">event_busy</span>
             <p className="text-xs font-bold text-on-surface">
-              Este cliente aún no tiene visitas registradas en la agenda
+              Este cliente aún no tiene visitas registradas en la ficha
             </p>
             <p className="text-[11px] text-on-surface-variant max-w-md mx-auto">
-              Cuando agendes y finalices una cita para {client.name}, aparecerá aquí automáticamente con la fecha, tratamiento, especialista, motivo y productos comprados.
+              Cuando finalices una cita para {client.name} o uses el botón <strong>+ Anotar en Ficha</strong>, aparecerá aquí en el cuadro de <strong>FECHA | OBSERVACIONES | PROCEDIMIENTO</strong>.
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {visits.map((visit, idx) => {
-              const isCompleted = visit.status === 'completado';
-              const isPodo = visit.discipline === 'podologia';
-              const soldProducts = visit.soldProducts || [];
-              const servicePrice =
-                visit.servicePrice !== undefined
-                  ? visit.servicePrice
-                  : Math.max(0, (Number(visit.price) || 0) - (Number(visit.productsTotal) || 0));
+          <div className="rounded-2xl border-2 border-on-surface/25 overflow-hidden bg-surface-container-lowest shadow-xs">
+            {/* Cabecera idéntica a la Ficha Física: FECHA | OBSERVACIONES | PROCEDIMIENTO */}
+            <div className="hidden sm:grid sm:grid-cols-12 bg-surface-container-high border-b-2 border-on-surface/25 text-xs font-extrabold uppercase tracking-wider text-on-surface text-center">
+              <div className="sm:col-span-2 py-3 px-2 border-r-2 border-on-surface/25">
+                FECHA
+              </div>
+              <div className="sm:col-span-5 py-3 px-4 border-r-2 border-on-surface/25">
+                OBSERVACIONES
+              </div>
+              <div className="sm:col-span-5 py-3 px-4">
+                PROCEDIMIENTO
+              </div>
+            </div>
 
-              return (
-                <article
-                  key={visit.id}
-                  className="p-4 rounded-2xl bg-surface-container-low/70 border border-surface-container-high/80 flex flex-col gap-3 hover:border-primary/30 transition-all"
-                >
-                  {/* Fila superior: # Visita, Fecha, Hora, Estado y Total */}
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface text-[11px] font-bold">
-                        Visita #{visits.length - idx}
-                      </span>
-                      <span className="flex items-center gap-1 text-xs font-bold text-primary bg-primary-container/10 px-2.5 py-0.5 rounded-full">
-                        <span className="material-symbols-outlined text-[14px]">calendar_today</span>
-                        {formatReadableDate(visit.date)} · {visit.time}
-                      </span>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                          isCompleted
-                            ? 'bg-emerald-100 text-emerald-800'
+            <div className="divide-y-2 divide-on-surface/20">
+              {visits.map((visit) => {
+                const isCompleted = visit.status === 'completado';
+                const soldProducts = visit.soldProducts || [];
+                const isEditing = editingVisitId === visit.id;
+                const shortDate = visit.date
+                  ? visit.date.split('-').reverse().join('/')
+                  : formatReadableDate(visit.date);
+
+                const obsLines = (visit.notes || '')
+                  .split('\n')
+                  .map((l) => l.trim())
+                  .filter(Boolean);
+
+                const procText = visit.procedure || visit.serviceName || '';
+                const procLines = procText
+                  .split('\n')
+                  .map((l) => l.trim())
+                  .filter(Boolean);
+
+                return (
+                  <div
+                    key={visit.id}
+                    className="grid grid-cols-1 sm:grid-cols-12 divide-y sm:divide-y-0 sm:divide-x-2 divide-on-surface/20 hover:bg-surface-container-low/40 transition-colors"
+                  >
+                    {/* Columna 1: FECHA */}
+                    <div className="sm:col-span-2 p-3 flex sm:flex-col items-center sm:items-center justify-between sm:justify-center gap-1.5 bg-surface-container-low/30 text-center">
+                      <div>
+                        <span className="font-mono text-sm font-extrabold text-on-surface block">
+                          {shortDate}
+                        </span>
+                        <span className="text-[10px] font-semibold text-outline block">
+                          {visit.time} · {visit.professionalName}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-col items-end sm:items-center gap-1">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            isCompleted
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : visit.status === 'en_curso'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-surface-container-high text-on-surface-variant'
+                          }`}
+                        >
+                          {isCompleted
+                            ? 'Finalizada'
                             : visit.status === 'en_curso'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-surface-container-high text-on-surface-variant'
-                        }`}
-                      >
-                        {isCompleted
-                          ? 'Atendida / Finalizada'
-                          : visit.status === 'en_curso'
-                          ? 'En Curso'
-                          : 'Programada'}
-                      </span>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="font-serif text-base font-bold text-primary">
-                        S/ {visit.price} PEN
-                      </span>
-                      {soldProducts.length > 0 && (
-                        <span className="block text-[10px] text-emerald-700 font-bold">
-                          (Servicio S/ {servicePrice} + Prod. S/ {visit.productsTotal || 0})
+                            ? 'En Curso'
+                            : 'Programada'}
                         </span>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Detalle estructurado: Qué se le hizo, Quién lo atendió, Motivo/Notas */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                    {/* Qué se le hizo */}
-                    <div className="p-2.5 rounded-xl bg-surface-container-lowest border border-surface-container-high/60">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-outline block">
-                        Qué se le realizó
-                      </span>
-                      <p className="text-xs font-bold text-on-surface mt-0.5 flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[15px] text-primary">
-                          {isPodo ? 'footprint' : 'spa'}
-                        </span>
-                        <span>{visit.serviceName}</span>
-                      </p>
-                      <span className="text-[10px] text-on-surface-variant block mt-0.5">
-                        {visit.durationMinutes} min · {visit.cabinName}
-                      </span>
-                    </div>
-
-                    {/* Quién lo atendió */}
-                    <div className="p-2.5 rounded-xl bg-surface-container-lowest border border-surface-container-high/60">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-outline block">
-                        Atendido por
-                      </span>
-                      <p className="text-xs font-bold text-on-surface mt-0.5 flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[15px] text-secondary">
-                          badge
-                        </span>
-                        <span>{visit.professionalName}</span>
-                      </p>
-                      <span className="text-[10px] text-on-surface-variant block mt-0.5">
-                        {visit.professionalRole || 'Especialista'}
-                      </span>
-                    </div>
-
-                    {/* Motivo / Observaciones */}
-                    <div className="p-2.5 rounded-xl bg-surface-container-lowest border border-surface-container-high/60">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-outline block">
-                        Motivo / Observaciones
-                      </span>
-                      <p className="text-xs text-on-surface mt-0.5 font-medium">
-                        {visit.notes ? visit.notes : 'Control y atención de sesión regular.'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Productos comprados en la visita */}
-                  {soldProducts.length > 0 && (
-                    <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 flex flex-col gap-1.5">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-emerald-900">
-                        <span className="flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[15px]">shopping_bag</span>
-                          Productos adquiridos en esta sesión:
-                        </span>
-                        <span>Subtotal: S/ {visit.productsTotal || 0}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {soldProducts.map((item, i) => (
-                          <span
-                            key={`${item.productId}-${i}`}
-                            className="px-2.5 py-1 rounded-lg bg-white border border-emerald-200 text-[11px] font-semibold text-emerald-950"
+                        {!isEditing && (
+                          <button
+                            type="button"
+                            onClick={() => startEditingVisit(visit)}
+                            className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5 mt-0.5"
                           >
-                            {item.quantity}x {item.name} ({item.presentation}) — S/ {item.subtotal ?? item.unitPrice * item.quantity}
-                          </span>
-                        ))}
+                            <span className="material-symbols-outlined text-[13px]">edit</span>
+                            <span>Editar</span>
+                          </button>
+                        )}
                       </div>
                     </div>
-                  )}
-                </article>
-              );
-            })}
+
+                    {/* Columna 2: OBSERVACIONES */}
+                    <div className="sm:col-span-5 p-3.5 flex flex-col justify-between">
+                      <div>
+                        <span className="sm:hidden text-[10px] font-extrabold uppercase tracking-wider text-outline block mb-1">
+                          OBSERVACIONES
+                        </span>
+
+                        {isEditing ? (
+                          <textarea
+                            rows={4}
+                            value={editObs}
+                            onChange={(e) => setEditObs(e.target.value)}
+                            placeholder={'• Onicomicosis ambos 1er dedo\n• Helomas sobre los 4to y 5to dedo'}
+                            className="w-full bg-surface-container-lowest border border-primary rounded-xl p-2.5 text-xs font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                        ) : obsLines.length > 0 ? (
+                          <ul className="space-y-1 text-xs text-on-surface font-medium leading-relaxed">
+                            {obsLines.map((line, i) => {
+                              const clean = line.replace(/^[•\-*]\s*/, '');
+                              return (
+                                <li key={i} className="flex items-start gap-1.5">
+                                  <span className="text-primary font-bold select-none">•</span>
+                                  <span>{clean}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <p className="text-xs text-outline italic">
+                            Sin observaciones registradas. Pulsa «Editar» para anotar hallazgos.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Columna 3: PROCEDIMIENTO */}
+                    <div className="sm:col-span-5 p-3.5 flex flex-col justify-between gap-2">
+                      <div>
+                        <span className="sm:hidden text-[10px] font-extrabold uppercase tracking-wider text-outline block mb-1">
+                          PROCEDIMIENTO
+                        </span>
+
+                        {isEditing ? (
+                          <div className="space-y-2">
+                            <textarea
+                              rows={4}
+                              value={editProc}
+                              onChange={(e) => setEditProc(e.target.value)}
+                              placeholder={'- Profilaxis\n- Se le recomendó ortésicos\n- Des. calzado, antisudoral, ciclopirox'}
+                              className="w-full bg-surface-container-lowest border border-primary rounded-xl p-2.5 text-xs font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingVisitId(null)}
+                                className="px-2.5 py-1 rounded-lg bg-surface-container-high text-xs font-bold text-on-surface-variant"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isSavingVisitEdit}
+                                onClick={() => handleSaveVisitEdit(visit.id)}
+                                className="px-3 py-1 rounded-lg bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800"
+                              >
+                                {isSavingVisitEdit ? 'Guardando...' : 'Guardar cambios'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {procLines.length > 0 ? (
+                              <ul className="space-y-1 text-xs text-on-surface font-medium leading-relaxed">
+                                {procLines.map((line, i) => {
+                                  const clean = line.replace(/^[-•*]\s*/, '');
+                                  return (
+                                    <li key={i} className="flex items-start gap-1.5">
+                                      <span className="text-secondary font-bold select-none">-</span>
+                                      <span>{clean}</span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : (
+                              <p className="text-xs text-outline italic">
+                                —
+                              </p>
+                            )}
+
+                            {visit.procedure &&
+                              visit.serviceName &&
+                              !visit.procedure
+                                .toLowerCase()
+                                .includes(visit.serviceName.toLowerCase()) && (
+                                <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded bg-primary-container/10 text-primary mt-1">
+                                  Servicio base: {visit.serviceName}
+                                </span>
+                              )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Productos comprados + Importe al pie de Procedimiento */}
+                      <div className="pt-2 border-t border-surface-container-high/70 flex items-center justify-between gap-2 flex-wrap">
+                        {soldProducts.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {soldProducts.map((item, i) => (
+                              <span
+                                key={`${item.productId}-${i}`}
+                                className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-900"
+                              >
+                                🛍️ {item.quantity}x {item.name} ({item.presentation})
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-outline">
+                            {visit.cabinName}
+                          </span>
+                        )}
+
+                        {Number(visit.price) > 0 && (
+                          <span className="font-serif text-xs font-bold text-primary ml-auto">
+                            S/ {visit.price}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </section>

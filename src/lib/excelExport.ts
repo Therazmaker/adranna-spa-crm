@@ -482,9 +482,10 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
    <Column ss:Width="95"/>
    <Column ss:Width="105"/>
    <Column ss:Width="180"/>
+   <Column ss:Width="180"/>
 
    <Row ss:Height="26">
-    ${cellString('DETALLE DE INGRESOS POR CITAS Y VENTA DE PRODUCTOS', 'sTitle', 14)}
+    ${cellString('DETALLE DE INGRESOS POR CITAS Y VENTA DE PRODUCTOS', 'sTitle', 15)}
    </Row>
    <Row ss:Height="22">
     ${cellString('Fecha', 'sTableHeader')}
@@ -501,11 +502,12 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     ${cellString('Productos Vendidos', 'sTableHeader')}
     ${cellString('Productos (S/)', 'sTableHeader')}
     ${cellString('Total Cobrado (S/)', 'sTableHeader')}
-    ${cellString('Notas / Motivo de Visita', 'sTableHeader')}
+    ${cellString('Observaciones (Hallazgos)', 'sTableHeader')}
+    ${cellString('Procedimiento Realizado', 'sTableHeader')}
    </Row>
    ${
      sortedApts.length === 0
-       ? `<Row ss:Height="20">${cellString('No hay ingresos registrados en este período.', 'sCell', 14)}</Row>`
+       ? `<Row ss:Height="20">${cellString('No hay ingresos registrados en este período.', 'sCell', 15)}</Row>`
        : sortedApts
            .map((a) => {
              const prodAmt = Number(a.productsTotal) || 0;
@@ -534,7 +536,8 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     ${cellString(prodSummary, 'sCell')}
     ${cellNumber(prodAmt, 'sCurrency')}
     ${cellNumber(totalAmt, 'sCurrency')}
-    ${cellString(a.notes || '', 'sCell')}
+    ${cellString((a.notes || '').replace(/\n+/g, ' | '), 'sCell')}
+    ${cellString((a.procedure || a.serviceName || '').replace(/\n+/g, ' | '), 'sCell')}
    </Row>`;
            })
            .join('\n   ')
@@ -545,7 +548,7 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     ${cellString('', 'sTotalLabel')}
     ${cellNumber(totalProductsSold, 'sTotalCurrency')}
     ${cellNumber(totalIncome, 'sTotalCurrency')}
-    ${cellString('', 'sTotalLabel')}
+    ${cellString('', 'sTotalLabel', 1)}
    </Row>
   </Table>
  </Worksheet>

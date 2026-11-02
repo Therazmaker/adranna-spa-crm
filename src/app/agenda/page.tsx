@@ -162,9 +162,25 @@ export default function AgendaPage() {
     }
   };
 
-  const handleStatusChange = (newStatus: Appointment['status']) => {
+  const handleStatusChange = (
+    newStatus: Appointment['status'],
+    updatedFields?: Partial<Appointment>
+  ) => {
     if (!selectedAppointment) return;
-    applyStatusChange(selectedAppointment, newStatus);
+    const mergedApt: Appointment = updatedFields
+      ? { ...selectedAppointment, ...updatedFields }
+      : selectedAppointment;
+    if (updatedFields) {
+      setAppointments((prev) => prev.map((a) => (a.id === mergedApt.id ? mergedApt : a)));
+    }
+    applyStatusChange(mergedApt, newStatus);
+  };
+
+  const handleQuickNotesSaved = (updatedApt: Appointment) => {
+    setAppointments((prev) => prev.map((a) => (a.id === updatedApt.id ? updatedApt : a)));
+    if (selectedAppointment?.id === updatedApt.id) {
+      setSelectedAppointment(updatedApt);
+    }
   };
 
   const handleColorChange = async (apt: Appointment, color: string) => {
@@ -930,6 +946,7 @@ export default function AgendaPage() {
         onEdit={handleEditAppointment}
         onDelete={handleDeleteAppointment}
         onColorChange={handleColorChange}
+        onQuickNotesSaved={handleQuickNotesSaved}
       />
 
       {/* Modal Finalizar Sesión + Venta de Productos de Inventario */}

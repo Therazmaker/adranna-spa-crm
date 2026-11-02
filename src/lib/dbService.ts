@@ -658,6 +658,7 @@ export const dbService = {
     if (updates.time !== undefined)             payload.appointment_time = updates.time;
     if (
       updates.notes !== undefined ||
+      updates.procedure !== undefined ||
       updates.soldProducts !== undefined ||
       updates.productsTotal !== undefined ||
       updates.servicePrice !== undefined ||
@@ -1443,6 +1444,7 @@ function encodeClientNotes(c: Partial<Client>): string | null {
 function encodeAptNotes(a: Partial<Appointment>): string | null {
   const { cleanNotes } = parseMetaFromNotes(a.notes);
   const meta: Record<string, unknown> = {};
+  if (a.procedure && a.procedure.trim()) meta.procedure = a.procedure.trim();
   if (a.servicePrice !== undefined) meta.servicePrice = a.servicePrice;
   if (a.soldProducts && a.soldProducts.length > 0) meta.soldProducts = a.soldProducts;
   if (a.productsTotal !== undefined) meta.productsTotal = a.productsTotal;
@@ -1474,6 +1476,7 @@ function mapClient(c: any): Client {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapAppointment(a: any): Appointment {
   const { cleanNotes, meta } = parseMetaFromNotes<{
+    procedure?: string;
     servicePrice?: number;
     soldProducts?: SoldProductItem[];
     productsTotal?: number;
@@ -1494,7 +1497,9 @@ function mapAppointment(a: any): Appointment {
     status: a.status, date: a.appointment_date,
     time: a.appointment_time?.slice(0, 5) || '10:00',
     hasMedicalAlert: a.has_medical_alert, medicalAlertText: a.medical_alert_text,
-    hasPendingConsent: a.has_pending_consent, notes: cleanNotes,
+    hasPendingConsent: a.has_pending_consent,
+    notes: cleanNotes,
+    procedure: meta.procedure,
   };
 }
 
