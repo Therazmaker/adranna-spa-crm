@@ -661,6 +661,7 @@ export const dbService = {
       updates.soldProducts !== undefined ||
       updates.productsTotal !== undefined ||
       updates.servicePrice !== undefined ||
+      updates.paymentMethod !== undefined ||
       updates.blockColor !== undefined
     ) {
       const target = updatedLocal || (updates as Appointment);
@@ -1445,6 +1446,7 @@ function encodeAptNotes(a: Partial<Appointment>): string | null {
   if (a.servicePrice !== undefined) meta.servicePrice = a.servicePrice;
   if (a.soldProducts && a.soldProducts.length > 0) meta.soldProducts = a.soldProducts;
   if (a.productsTotal !== undefined) meta.productsTotal = a.productsTotal;
+  if (a.paymentMethod) meta.paymentMethod = a.paymentMethod;
   if (a.blockColor) meta.blockColor = a.blockColor;
   const hasMeta = Object.keys(meta).length > 0;
   if (!cleanNotes && !hasMeta) return null;
@@ -1475,6 +1477,7 @@ function mapAppointment(a: any): Appointment {
     servicePrice?: number;
     soldProducts?: SoldProductItem[];
     productsTotal?: number;
+    paymentMethod?: Appointment['paymentMethod'];
     blockColor?: string;
   }>(a.notes);
   return {
@@ -1486,6 +1489,7 @@ function mapAppointment(a: any): Appointment {
     servicePrice: meta.servicePrice,
     soldProducts: meta.soldProducts,
     productsTotal: meta.productsTotal,
+    paymentMethod: meta.paymentMethod || 'efectivo',
     blockColor: meta.blockColor,
     status: a.status, date: a.appointment_date,
     time: a.appointment_time?.slice(0, 5) || '10:00',

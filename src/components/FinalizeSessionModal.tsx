@@ -1,8 +1,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Appointment, InventoryProduct, SoldProductItem } from '@/types/database';
+import { Appointment, InventoryProduct, PaymentMethod, SoldProductItem } from '@/types/database';
 import { dbService } from '@/lib/dbService';
+
+const PAYMENT_OPTIONS: { label: string; value: PaymentMethod; icon: string }[] = [
+  { label: 'Efectivo', value: 'efectivo', icon: 'payments' },
+  { label: 'Yape / Plin', value: 'yape_plin', icon: 'qr_code_2' },
+  { label: 'Tarjeta / POS', value: 'tarjeta', icon: 'credit_card' },
+  { label: 'Transferencia', value: 'transferencia', icon: 'account_balance' },
+];
 
 interface FinalizeSessionModalProps {
   appointment: Appointment | null;
@@ -20,6 +27,7 @@ export default function FinalizeSessionModal({
   const [cart, setCart] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [sessionNotes, setSessionNotes] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
   const [isSaving, setIsSaving] = useState(false);
 
   // Quick product creation inline
@@ -34,6 +42,7 @@ export default function FinalizeSessionModal({
       setCart({});
       setSearchQuery('');
       setSessionNotes(appointment.notes || '');
+      setPaymentMethod(appointment.paymentMethod || 'efectivo');
       setShowQuickCreate(false);
       dbService.getInventory().then(setInventory);
     }
@@ -112,13 +121,14 @@ export default function FinalizeSessionModal({
       }
     }
 
-    // 2. Actualizar cita como completada con el desglose de productos y notas
+    // 2. Actualizar cita como completada con el desglose de productos, medio de pago y notas
     const updates: Partial<Appointment> = {
       status: 'completado',
       servicePrice: baseServicePrice,
       soldProducts: itemsToSave,
       productsTotal: prodSum,
       price: totalPrice,
+      paymentMethod,
       notes: sessionNotes.trim() || undefined,
     };
 
@@ -206,6 +216,29 @@ export default function FinalizeSessionModal({
               onChange={(e) => setSessionNotes(e.target.value)}
               className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl px-3 py-2 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
             />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-bold text-on-surface-variant block mb-1.5">
+              Método de Pago recibido (para el Cuadre de Caja):
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {PAYMENT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPaymentMethod(opt.value)}
+                  className={`py-2 px-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                    paymentMethod === opt.value
+                      ? 'bg-primary text-white border-primary shadow-xs'
+                      : 'bg-surface-container-lowest text-on-surface-variant border-surface-container-high hover:border-primary/40'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[15px]">{opt.icon}</span>
+                  <span>{opt.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

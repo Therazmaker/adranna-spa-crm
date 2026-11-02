@@ -1,12 +1,14 @@
 export type UserRole = 'admin' | 'recepcion' | 'terapeuta';
 
+export type PaymentMethod = 'efectivo' | 'yape_plin' | 'transferencia' | 'tarjeta';
+
 export interface Expense {
   id: string;
   description: string;
   amount: number;
   category: 'insumos' | 'alquiler' | 'servicios' | 'personal' | 'otros';
   date: string;
-  paymentMethod: 'efectivo' | 'transferencia' | 'tarjeta' | 'yape_plin';
+  paymentMethod: PaymentMethod;
   notes?: string;
   createdAt?: string;
 }
@@ -65,6 +67,7 @@ export interface Appointment {
   servicePrice?: number; // Precio base del servicio
   soldProducts?: SoldProductItem[];
   productsTotal?: number;
+  paymentMethod?: PaymentMethod; // Medio de pago para el cuadre de caja
   blockColor?: string; // Color personalizado en vista calendario
   status: 'confirmado' | 'en_curso' | 'completado' | 'cancelado';
   date: string; // YYYY-MM-DD
