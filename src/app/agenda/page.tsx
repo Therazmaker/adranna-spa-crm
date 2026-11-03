@@ -8,6 +8,7 @@ import NewAppointmentModal, { BLOCK_COLOR_PALETTE } from '@/components/NewAppoin
 import FinalizeSessionModal from '@/components/FinalizeSessionModal';
 import { formatTime12, formatHourSlot12 } from '@/lib/timeUtils';
 import { getLocalDateStr } from '@/lib/dateUtils';
+import { getAptPayments, getPaymentOption, isMixedPayment } from '@/lib/payments';
 
 type ViewMode = 'calendar' | 'list';
 type CalendarRange = 'dia' | 'semana' | 'quincena' | 'mensual';
@@ -1407,9 +1408,30 @@ export default function AgendaPage() {
                             ? 'Finalizada'
                             : 'Confirmada'}
                         </span>
-                        <span className="text-xs font-bold text-primary">
-                          S/ {apt.price}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          {isCompleted && (
+                            <div className="flex items-center gap-1 flex-wrap justify-end">
+                              {getAptPayments(apt).map((p) => {
+                                const opt = getPaymentOption(p.method);
+                                const mixed = isMixedPayment(apt);
+                                return (
+                                  <span
+                                    key={p.method}
+                                    title={`Pagado con ${opt.label}: S/ ${Number(p.amount).toFixed(2)}`}
+                                    className={`px-1.5 py-0.5 rounded-md border text-[10px] font-bold flex items-center gap-0.5 ${opt.badgeClass}`}
+                                  >
+                                    <span className="material-symbols-outlined text-[11px]">{opt.icon}</span>
+                                    <span>{opt.shortLabel}</span>
+                                    {mixed && <span className="opacity-80">· S/{Number(p.amount)}</span>}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <span className="text-xs font-bold text-primary">
+                            S/ {apt.price}
+                          </span>
+                        </div>
 
                         {/* Acción rápida en 1 toque */}
                         {!isCompleted ? (

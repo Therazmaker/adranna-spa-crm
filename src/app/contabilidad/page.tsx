@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { dbService } from '@/lib/dbService';
 import { Appointment, Expense, PaymentMethod } from '@/types/database';
+import { getAptAmountForMethod, getAptPayments, getPaymentOption, isMixedPayment } from '@/lib/payments';
 import { exportCashReconciliationExcel } from '@/lib/excelExport';
 import { getLocalDateStr, getStartOfWeekLocal, getStartOfMonthLocal } from '@/lib/dateUtils';
 import { formatTime12 } from '@/lib/timeUtils';
@@ -209,13 +210,14 @@ export default function ContabilidadPage() {
 
   // Desglose por método de pago (para el Cuadre de Caja)
   const paymentBreakdown = PAYMENT_METHODS.map((pm) => {
+    // Considera pagos mixtos: una cita puede aportar a varios métodos
     const aptsForMethod = filteredApts.filter(
-      (a) => (a.paymentMethod || 'efectivo') === pm.value
+      (a) => getAptAmountForMethod(a, pm.value) > 0
     );
     const expsForMethod = filteredExps.filter(
       (e) => (e.paymentMethod || 'efectivo') === pm.value
     );
-    const income = aptsForMethod.reduce((s, a) => s + (Number(a.price) || 0), 0);
+    const income = filteredApts.reduce((s, a) => s + getAptAmountForMethod(a, pm.value), 0);
     const expense = expsForMethod.reduce((s, e) => s + (Number(e.amount) || 0), 0);
     return {
       ...pm,
@@ -260,9 +262,17 @@ export default function ContabilidadPage() {
     newMethod: PaymentMethod
   ) => {
     setAppointments((prev) =>
-      prev.map((a) => (a.id === aptId ? { ...a, paymentMethod: newMethod } : a))
+      prev.map((a) =>
+        a.id === aptId
+          ? { ...a, paymentMethod: newMethod, payments: [{ method: newMethod, amount: Number(a.price) || 0 }] }
+          : a
+      )
     );
-    await dbService.updateAppointment(aptId, { paymentMethod: newMethod });
+    const apt = appointments.find((a) => a.id === aptId);
+    await dbService.updateAppointment(aptId, {
+      paymentMethod: newMethod,
+      payments: [{ method: newMethod, amount: Number(apt?.price) || 0 }],
+    });
   };
 
   const handleExportExcel = () => {
@@ -823,6 +833,23 @@ export default function ContabilidadPage() {
                 </div>
 
                 <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0">
+                  {isMixedPayment(apt) ? (
+                    <div className="flex items-center gap-1 flex-wrap justify-end" title="Pago mixto">
+                      <span className="material-symbols-outlined text-[14px] text-secondary">call_split</span>
+                      {getAptPayments(apt).map((p) => {
+                        const opt = getPaymentOption(p.method);
+                        return (
+                          <span
+                            key={p.method}
+                            className={`px-1.5 py-0.5 rounded-md border text-[10px] font-bold flex items-center gap-0.5 ${opt.badgeClass}`}
+                          >
+                            <span className="material-symbols-outlined text-[12px]">{opt.icon}</span>
+                            {opt.shortLabel} S/{Number(p.amount).toFixed(2)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
                   <select
                     value={apt.paymentMethod || 'efectivo'}
                     onChange={(e) =>
@@ -840,6 +867,7 @@ export default function ContabilidadPage() {
                       </option>
                     ))}
                   </select>
+                  )}
 
                   <span className="font-serif font-bold text-base text-primary min-w-[72px] text-right">
                     + S/ {Number(apt.price || 0).toFixed(2)}

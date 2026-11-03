@@ -8,6 +8,7 @@ import AppointmentBottomSheet from '@/components/AppointmentBottomSheet';
 import NewAppointmentModal from '@/components/NewAppointmentModal';
 import FinalizeSessionModal from '@/components/FinalizeSessionModal';
 import { formatTime12 } from '@/lib/timeUtils';
+import { getAptPayments, getPaymentOption, isMixedPayment } from '@/lib/payments';
 import { useAuth } from '@/context/AuthContext';
 
 export default function DashboardPage() {
@@ -581,7 +582,7 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-surface-container-high/40 text-xs text-on-surface-variant">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-surface-container-high/40 text-xs text-on-surface-variant">
                       <div className="flex items-center gap-1.5 truncate">
                         <span className="material-symbols-outlined text-[15px] text-primary">
                           badge
@@ -590,7 +591,26 @@ export default function DashboardPage() {
                           {apt.professionalName} • {apt.cabinName}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-wrap justify-end flex-shrink-0">
+                        {isCompleted && (
+                          <div className="flex items-center gap-1 flex-wrap justify-end">
+                            {getAptPayments(apt).map((p) => {
+                              const opt = getPaymentOption(p.method);
+                              const mixed = isMixedPayment(apt);
+                              return (
+                                <span
+                                  key={p.method}
+                                  title={`Pagado con ${opt.label}: S/ ${Number(p.amount).toFixed(2)}`}
+                                  className={`px-2 py-0.5 rounded-md border text-[10px] font-bold flex items-center gap-1 shadow-2xs ${opt.badgeClass}`}
+                                >
+                                  <span className="material-symbols-outlined text-[12px]">{opt.icon}</span>
+                                  <span>{opt.shortLabel}</span>
+                                  {mixed && <span className="opacity-90 font-mono">· S/{Number(p.amount)}</span>}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                         <span className="font-serif font-bold text-primary">
                           S/ {apt.price} PEN
                         </span>

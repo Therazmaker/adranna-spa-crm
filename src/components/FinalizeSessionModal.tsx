@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Appointment, InventoryProduct, PaymentMethod, SoldProductItem } from '@/types/database';
+import { Appointment, InventoryProduct, PaymentMethod, PaymentSplit, SoldProductItem } from '@/types/database';
 import { dbService } from '@/lib/dbService';
 import { getLocalDateStr } from '@/lib/dateUtils';
+import { getPrimaryMethod } from '@/lib/payments';
 
 const PAYMENT_OPTIONS: { label: string; value: PaymentMethod; icon: string }[] = [
   { label: 'Efectivo', value: 'efectivo', icon: 'payments' },
@@ -30,6 +31,14 @@ export default function FinalizeSessionModal({
   const [sessionNotes, setSessionNotes] = useState('');
   const [sessionProcedure, setSessionProcedure] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
+  // Pago mixto: el cliente paga una parte con un método y otra parte con otro
+  const [isSplitPayment, setIsSplitPayment] = useState(false);
+  const [splitAmounts, setSplitAmounts] = useState<Record<PaymentMethod, string>>({
+    efectivo: '',
+    yape_plin: '',
+    tarjeta: '',
+    transferencia: '',
+  });
   const [servicePriceInput, setServicePriceInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -47,6 +56,18 @@ export default function FinalizeSessionModal({
       setSessionNotes(appointment.notes || '');
       setSessionProcedure(appointment.procedure || '');
       setPaymentMethod(appointment.paymentMethod || 'efectivo');
+      const prevSplits = (appointment.payments || []).filter((p) => Number(p.amount) > 0);
+      if (prevSplits.length > 1) {
+        setIsSplitPayment(true);
+        const next: Record<PaymentMethod, string> = { efectivo: '', yape_plin: '', tarjeta: '', transferencia: '' };
+        prevSplits.forEach((p) => {
+          next[p.method] = String(p.amount);
+        });
+        setSplitAmounts(next);
+      } else {
+        setIsSplitPayment(false);
+        setSplitAmounts({ efectivo: '', yape_plin: '', tarjeta: '', transferencia: '' });
+      }
       setShowQuickCreate(false);
       dbService.getInventory().then(setInventory);
 
@@ -85,6 +106,30 @@ export default function FinalizeSessionModal({
   );
   const finalTotal = baseServicePrice + productsTotal;
 
+  // Total a cobrar según el flujo actual (solo sesión o sesión + productos)
+  const amountDue = wantsProducts ? finalTotal : baseServicePrice;
+  const splitAssigned = PAYMENT_OPTIONS.reduce(
+    (s, opt) => s + (Number(splitAmounts[opt.value]) || 0),
+    0
+  );
+  const splitRemaining = Math.round((amountDue - splitAssigned) * 100) / 100;
+  const splitIsValid = !isSplitPayment || Math.abs(splitRemaining) < 0.01;
+
+  const fillRemaining = (method: PaymentMethod) => {
+    const current = Number(splitAmounts[method]) || 0;
+    const next = Math.max(0, Math.round((current + splitRemaining) * 100) / 100);
+    setSplitAmounts((prev) => ({ ...prev, [method]: next > 0 ? String(next) : '' }));
+  };
+
+  const buildPayments = (total: number): PaymentSplit[] => {
+    if (!isSplitPayment) return [{ method: paymentMethod, amount: total }];
+    const parts = PAYMENT_OPTIONS.map((opt) => ({
+      method: opt.value,
+      amount: Math.round((Number(splitAmounts[opt.value]) || 0) * 100) / 100,
+    })).filter((p) => p.amount > 0);
+    return parts.length > 0 ? parts : [{ method: paymentMethod, amount: total }];
+  };
+
   const updateQty = (prodId: string, delta: number) => {
     setCart((prev) => {
       const next = (prev[prodId] || 0) + delta;
@@ -115,11 +160,13 @@ export default function FinalizeSessionModal({
 
   const handleConfirmFinalize = async (withProducts: boolean) => {
     if (isSaving) return;
+    if (!splitIsValid) return;
     setIsSaving(true);
 
     const itemsToSave = withProducts ? soldProducts : [];
     const prodSum = withProducts ? productsTotal : 0;
     const totalPrice = baseServicePrice + prodSum;
+    const payments = buildPayments(totalPrice);
 
     // 1. Descontar stock de los productos vendidos
     if (itemsToSave.length > 0) {
@@ -139,7 +186,8 @@ export default function FinalizeSessionModal({
       soldProducts: itemsToSave,
       productsTotal: prodSum,
       price: totalPrice,
-      paymentMethod,
+      paymentMethod: getPrimaryMethod(payments, paymentMethod),
+      payments,
       notes: sessionNotes.trim() || undefined,
       procedure: sessionProcedure.trim() || undefined,
     };
@@ -324,26 +372,134 @@ export default function FinalizeSessionModal({
           </div>
 
           <div>
-            <label className="text-[11px] font-bold text-on-surface-variant block mb-1.5">
-              Método de Pago recibido (para el Cuadre de Caja):
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-              {PAYMENT_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setPaymentMethod(opt.value)}
-                  className={`py-2 px-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
-                    paymentMethod === opt.value
-                      ? 'bg-primary text-white border-primary shadow-xs'
-                      : 'bg-surface-container-lowest text-on-surface-variant border-surface-container-high hover:border-primary/40'
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <label className="text-[11px] font-bold text-on-surface-variant block">
+                Método de Pago recibido (para el Cuadre de Caja):
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSplitPayment((v) => {
+                    const next = !v;
+                    if (next) {
+                      // Precarga el total en el método seleccionado para que solo tengan que repartir
+                      setSplitAmounts({
+                        efectivo: '',
+                        yape_plin: '',
+                        tarjeta: '',
+                        transferencia: '',
+                        [paymentMethod]: amountDue > 0 ? String(amountDue) : '',
+                      } as Record<PaymentMethod, string>);
+                    }
+                    return next;
+                  });
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 border transition-all ${
+                  isSplitPayment
+                    ? 'bg-secondary text-white border-secondary shadow-2xs'
+                    : 'bg-surface-container-lowest text-secondary border-secondary/40 hover:bg-secondary/10'
+                }`}
+                title="El cliente paga con más de un método (ej. parte efectivo y parte Yape)"
+              >
+                <span className="material-symbols-outlined text-[14px]">call_split</span>
+                {isSplitPayment ? 'Pago mixto activado' : 'Pago mixto'}
+              </button>
+            </div>
+
+            {!isSplitPayment ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                {PAYMENT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPaymentMethod(opt.value)}
+                    className={`py-2 px-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                      paymentMethod === opt.value
+                        ? 'bg-primary text-white border-primary shadow-xs'
+                        : 'bg-surface-container-lowest text-on-surface-variant border-surface-container-high hover:border-primary/40'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[15px]">{opt.icon}</span>
+                    <span>{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2 p-2.5 rounded-xl bg-surface-container-lowest border border-secondary/30">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {PAYMENT_OPTIONS.map((opt) => {
+                    const val = splitAmounts[opt.value];
+                    const hasValue = (Number(val) || 0) > 0;
+                    return (
+                      <div
+                        key={opt.value}
+                        className={`flex items-center gap-2 p-1.5 pl-2.5 rounded-xl border transition-all ${
+                          hasValue
+                            ? 'border-primary bg-primary-container/10'
+                            : 'border-surface-container-high bg-surface-container-low/50'
+                        }`}
+                      >
+                        <span className={`material-symbols-outlined text-[16px] ${hasValue ? 'text-primary' : 'text-outline'}`}>
+                          {opt.icon}
+                        </span>
+                        <span className={`text-[11px] font-bold flex-1 ${hasValue ? 'text-primary' : 'text-on-surface-variant'}`}>
+                          {opt.label}
+                        </span>
+                        <div className="relative flex items-center">
+                          <span className="absolute left-2 text-[11px] font-bold text-outline">S/</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            inputMode="decimal"
+                            value={val}
+                            placeholder="0"
+                            onChange={(e) =>
+                              setSplitAmounts((prev) => ({ ...prev, [opt.value]: e.target.value }))
+                            }
+                            className="w-20 pl-6 pr-2 py-1 rounded-lg bg-surface-container-lowest border border-surface-container-high focus:border-primary text-xs font-bold text-primary text-right focus:outline-none focus:ring-1 focus:ring-primary"
+                          />
+                        </div>
+                        {splitRemaining > 0.009 && (
+                          <button
+                            type="button"
+                            onClick={() => fillRemaining(opt.value)}
+                            title={`Asignar el resto (S/ ${splitRemaining.toFixed(2)}) a ${opt.label}`}
+                            className="w-6 h-6 rounded-lg bg-secondary/15 text-secondary hover:bg-secondary hover:text-white flex items-center justify-center transition-colors"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">add</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div
+                  className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-bold ${
+                    Math.abs(splitRemaining) < 0.01
+                      ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                      : splitRemaining > 0
+                      ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                      : 'bg-red-50 text-red-700 border border-red-200'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[15px]">{opt.icon}</span>
-                  <span>{opt.label}</span>
-                </button>
-              ))}
-            </div>
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">
+                      {Math.abs(splitRemaining) < 0.01 ? 'check_circle' : 'error'}
+                    </span>
+                    Asignado S/ {splitAssigned.toFixed(2)} de S/ {amountDue.toFixed(2)}
+                  </span>
+                  <span>
+                    {Math.abs(splitRemaining) < 0.01
+                      ? 'Cuadra ✓'
+                      : splitRemaining > 0
+                      ? `Falta S/ ${splitRemaining.toFixed(2)}`
+                      : `Sobra S/ ${Math.abs(splitRemaining).toFixed(2)}`}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -360,9 +516,10 @@ export default function FinalizeSessionModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <button
                 type="button"
-                disabled={isSaving}
+                disabled={isSaving || !splitIsValid}
+                title={!splitIsValid ? 'El pago mixto no cuadra con el total' : undefined}
                 onClick={() => handleConfirmFinalize(false)}
-                className="py-3.5 px-4 rounded-2xl bg-emerald-700 text-white text-xs font-bold shadow-md hover:bg-emerald-800 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                className="py-3.5 px-4 rounded-2xl bg-emerald-700 text-white text-xs font-bold shadow-md hover:bg-emerald-800 active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-[18px]">check_circle</span>
                 <span>No, finalizar solo sesión (S/ {baseServicePrice.toFixed(2)})</span>
@@ -555,7 +712,8 @@ export default function FinalizeSessionModal({
 
               <button
                 type="button"
-                disabled={isSaving}
+                disabled={isSaving || !splitIsValid}
+                title={!splitIsValid ? 'El pago mixto no cuadra con el total' : undefined}
                 onClick={() => handleConfirmFinalize(true)}
                 className="w-full py-3.5 rounded-xl bg-emerald-700 text-white text-xs font-bold shadow-md hover:bg-emerald-800 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
               >

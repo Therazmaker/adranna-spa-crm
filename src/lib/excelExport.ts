@@ -1,5 +1,6 @@
 import { Appointment, Expense, PaymentMethod } from '@/types/database';
 import { getLocalDateStr } from './dateUtils';
+import { getAptAmountForMethod, getAptPayments, getPaymentOption, isMixedPayment } from './payments';
 
 export interface CashReconciliationReportInput {
   periodLabel: string;
@@ -69,12 +70,12 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
   );
   const sortedExps = [...expenses].sort((a, b) => a.date.localeCompare(b.date));
 
-  // Cálculos por método de pago
+  // Cálculos por método de pago (soporta pagos mixtos)
   const methods: PaymentMethod[] = ['efectivo', 'yape_plin', 'tarjeta', 'transferencia'];
   const byMethod = methods.map((m) => {
-    const aptsForM = sortedApts.filter((a) => (a.paymentMethod || 'efectivo') === m);
+    const aptsForM = sortedApts.filter((a) => getAptAmountForMethod(a, m) > 0);
     const expsForM = sortedExps.filter((e) => (e.paymentMethod || 'efectivo') === m);
-    const income = aptsForM.reduce((s, a) => s + (Number(a.price) || 0), 0);
+    const income = sortedApts.reduce((s, a) => s + getAptAmountForMethod(a, m), 0);
     const expense = expsForM.reduce((s, e) => s + (Number(e.amount) || 0), 0);
     return {
       method: m,
@@ -521,7 +522,14 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
                      .map((p) => `${p.quantity}x ${p.name} (${p.presentation})`)
                      .join(', ')
                  : '—';
-             const payLabel = PAYMENT_METHOD_LABELS[a.paymentMethod || 'efectivo'] || 'Efectivo';
+             const payLabel = isMixedPayment(a)
+               ? getAptPayments(a)
+                   .map(
+                     (p) =>
+                       `${getPaymentOption(p.method).shortLabel}: S/${Number(p.amount).toFixed(2)}`
+                   )
+                   .join(' + ')
+               : PAYMENT_METHOD_LABELS[a.paymentMethod || 'efectivo'] || 'Efectivo';
              return `<Row ss:Height="20">
     ${cellString(a.date, 'sCellCenter')}
     ${cellString(a.time, 'sCellCenter')}

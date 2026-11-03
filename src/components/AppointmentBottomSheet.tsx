@@ -6,6 +6,7 @@ import { Appointment } from '@/types/database';
 import { BLOCK_COLOR_PALETTE } from '@/components/NewAppointmentModal';
 import { formatTime12 } from '@/lib/timeUtils';
 import { dbService } from '@/lib/dbService';
+import { getAptPayments, getPaymentOption, isMixedPayment } from '@/lib/payments';
 
 interface AppointmentBottomSheetProps {
   appointment: Appointment | null;
@@ -284,6 +285,34 @@ export default function AppointmentBottomSheet({
                   {p.quantity}x {p.name} ({p.presentation}) · S/ {p.subtotal ?? p.unitPrice * p.quantity}
                 </span>
               ))}
+            </div>
+          )}
+
+          {/* Desglose de método(s) de pago */}
+          {(appointment.status === 'completado' || appointment.payments) && (
+            <div className="pt-2 border-t border-surface-container-high/60 flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[11px] font-bold text-on-surface-variant flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px] text-primary">point_of_sale</span>
+                Método de cobro:
+              </span>
+              <div className="flex items-center gap-1 flex-wrap">
+                {getAptPayments(appointment).map((p) => {
+                  const opt = getPaymentOption(p.method);
+                  const mixed = isMixedPayment(appointment);
+                  return (
+                    <span
+                      key={p.method}
+                      className={`px-2 py-0.5 rounded-md border text-[11px] font-bold flex items-center gap-1 ${opt.badgeClass}`}
+                    >
+                      <span className="material-symbols-outlined text-[13px]">{opt.icon}</span>
+                      <span>{opt.label}</span>
+                      {mixed && (
+                        <span className="font-mono opacity-90">· S/ {Number(p.amount).toFixed(2)}</span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

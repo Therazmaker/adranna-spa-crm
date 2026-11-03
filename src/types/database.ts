@@ -2,6 +2,11 @@ export type UserRole = 'admin' | 'recepcion' | 'terapeuta';
 
 export type PaymentMethod = 'efectivo' | 'yape_plin' | 'transferencia' | 'tarjeta';
 
+export interface PaymentSplit {
+  method: PaymentMethod;
+  amount: number;
+}
+
 export interface Expense {
   id: string;
   description: string;
@@ -71,6 +76,7 @@ export interface Appointment {
   soldProducts?: SoldProductItem[];
   productsTotal?: number;
   paymentMethod?: PaymentMethod; // Medio de pago para el cuadre de caja
+  payments?: PaymentSplit[]; // Desglose de pago mixto (ej. parte efectivo + parte Yape)
   blockColor?: string; // Color personalizado en vista calendario
   status: 'confirmado' | 'en_curso' | 'completado' | 'cancelado';
   date: string; // YYYY-MM-DD
