@@ -93,7 +93,7 @@ export interface FootFinding {
   markerNumber: number;
   foot: 'izquierdo' | 'derecho';
   view: 'dorsal' | 'plantar';
-  condition: 'onicocriptosis' | 'hiperqueratosis' | 'micosis' | 'verruga';
+  condition: 'onicocriptosis' | 'hiperqueratosis' | 'micosis' | 'verruga' | 'heloma' | 'otro';
   title: string;
   severity: 'Agudo' | 'Crónico' | 'Seguimiento';
   description: string;
