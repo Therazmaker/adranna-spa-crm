@@ -91,6 +91,8 @@ export default function AgendaPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('calendar');
   const [calendarRange, setCalendarRange] = useState<CalendarRange>('semana');
   const [anchorDate, setAnchorDate] = useState<string>(() => toISODate(new Date()));
+  // Modo compacto: colapsa las horas sin ninguna cita en el rango visible
+  const [compactHours, setCompactHours] = useState<boolean>(true);
 
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
   const [slotDefaultDate, setSlotDefaultDate] = useState<string | undefined>(undefined);
@@ -117,6 +119,8 @@ export default function AgendaPage() {
     if (savedRange && ['dia', 'semana', 'quincena', 'mensual'].includes(savedRange)) {
       setCalendarRange(savedRange);
     }
+    const savedCompact = localStorage.getItem('adranna_agenda_compact');
+    if (savedCompact === '0') setCompactHours(false);
 
     dbService.getAppointments().then(setAppointments);
     dbService.getClients().then(setClients);
@@ -552,6 +556,27 @@ export default function AgendaPage() {
 
   const todayISO = toISODate(new Date());
 
+  const toggleCompactHours = () => {
+    setCompactHours((prev) => {
+      const next = !prev;
+      localStorage.setItem('adranna_agenda_compact', next ? '1' : '0');
+      return next;
+    });
+  };
+
+  // Horas que tienen al menos una cita en algún día del rango visible
+  const visibleDaysSet = new Set(calendarDays);
+  const busyHours = new Set(
+    calendarAppointments
+      .filter((a) => visibleDaysSet.has(a.date || todayISO))
+      .map((a) => getAppointmentHourKey(a.time))
+  );
+  const isHourCollapsed = (hour: string) =>
+    compactHours &&
+    !busyHours.has(hour) &&
+    !(draggedAppointment && dragOverTarget?.hour === hour);
+  const collapsedCount = HOURS.filter((h) => compactHours && !busyHours.has(h)).length;
+
   return (
     <div className="flex flex-col w-full pb-8 space-y-4">
       {/* Header Agenda */}
@@ -620,6 +645,40 @@ export default function AgendaPage() {
             <span className="w-3 h-3 rounded bg-[#7A4F3A] opacity-40 grayscale"></span>
             <span className="line-through">Cancelada</span>
           </span>
+
+          {calendarRange !== 'mensual' && (
+            <div className="ml-auto flex items-center gap-2">
+              {compactHours && collapsedCount > 0 && (
+                <span className="hidden sm:inline text-[10px] text-outline font-medium">
+                  {collapsedCount} {collapsedCount === 1 ? 'hora vacía compactada' : 'horas vacías compactadas'}
+                </span>
+              )}
+              <div className="inline-flex bg-surface-container p-0.5 rounded-lg border border-surface-container-high">
+                <button
+                  type="button"
+                  onClick={() => !compactHours && toggleCompactHours()}
+                  title="Compacta las horas sin citas"
+                  className={`px-2 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 transition-all ${
+                    compactHours ? 'bg-primary text-white shadow-2xs' : 'text-on-surface-variant hover:text-primary'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">compress</span>
+                  Compacto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => compactHours && toggleCompactHours()}
+                  title="Muestra todas las horas en tamaño completo"
+                  className={`px-2 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 transition-all ${
+                    !compactHours ? 'bg-primary text-white shadow-2xs' : 'text-on-surface-variant hover:text-primary'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">expand</span>
+                  Expandido
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -869,7 +928,36 @@ export default function AgendaPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-surface-container-high/70">
-                  {HOURS.map((hour) => (
+                  {HOURS.map((hour) =>
+                    isHourCollapsed(hour) ? (
+                      /* ── FILA COMPACTA: hora sin citas en el rango visible ── */
+                      <tr key={hour} className="group/row">
+                        <td className="py-0.5 px-2 text-center font-mono text-[10px] font-semibold text-outline/70 border-r border-surface-container-high bg-surface-container-low/40 sticky left-0 z-10 whitespace-nowrap">
+                          {formatHourSlot12(hour)}
+                        </td>
+                        {calendarDays.map((dStr) => (
+                          <td
+                            key={`${dStr}-${hour}`}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                              // Al arrastrar encima, la fila se expande para soltar en :00 o :30
+                              setDragOverTarget({ date: dStr, hour, subSlot: '00' });
+                            }}
+                            onClick={() => openNewAtSlot(dStr, `${hour.slice(0, 2)}:00`)}
+                            className={`h-7 p-0 border-r border-surface-container-high/70 cursor-pointer transition-colors group/ccell hover:bg-primary-container/10 ${
+                              dStr === todayISO ? 'bg-primary-container/[0.04]' : ''
+                            }`}
+                            title={`Agendar ${formatTime12(`${hour.slice(0, 2)}:00`)}`}
+                          >
+                            <div className="h-full flex items-center justify-center gap-1 text-[10px] text-outline font-semibold opacity-0 group-hover/ccell:opacity-100 transition-opacity pointer-events-none">
+                              <span className="material-symbols-outlined text-[12px]">add</span>
+                              <span>{formatTime12(`${hour.slice(0, 2)}:00`)}</span>
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    ) : (
                     <tr key={hour} className="group/row hover:bg-surface-container-low/30">
                       {/* Columna fija de hora tipo hoja de cálculo */}
                       <td className="py-2 px-2 text-center font-mono text-xs font-bold text-on-surface-variant border-r border-surface-container-high bg-surface-container-low/60 sticky left-0 z-10 whitespace-nowrap">
@@ -1052,7 +1140,8 @@ export default function AgendaPage() {
                         );
                       })}
                     </tr>
-                  ))}
+                    )
+                  )}
                 </tbody>
               </table>
             </div>
