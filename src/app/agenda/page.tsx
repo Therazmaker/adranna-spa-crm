@@ -7,6 +7,7 @@ import AppointmentBottomSheet from '@/components/AppointmentBottomSheet';
 import NewAppointmentModal, { BLOCK_COLOR_PALETTE } from '@/components/NewAppointmentModal';
 import FinalizeSessionModal from '@/components/FinalizeSessionModal';
 import { formatTime12, formatHourSlot12 } from '@/lib/timeUtils';
+import { getLocalDateStr } from '@/lib/dateUtils';
 
 type ViewMode = 'calendar' | 'list';
 type CalendarRange = 'dia' | 'semana' | 'quincena' | 'mensual';
@@ -30,10 +31,7 @@ const HOURS = [
 const DAY_NAMES_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
 function toISODate(d: Date): string {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getLocalDateStr(d);
 }
 
 function parseISODate(dateStr: string): Date {
@@ -63,6 +61,16 @@ function getAppointmentHourKey(timeStr?: string): string {
   return '10:00';
 }
 
+function getMinutesOfTime(timeStr?: string): number {
+  if (!timeStr) return 0;
+  const parts = timeStr.split(':');
+  if (parts.length >= 2) {
+    const min = parseInt(parts[1], 10);
+    return isNaN(min) ? 0 : min;
+  }
+  return 0;
+}
+
 function getBlockColor(apt: Appointment): string {
   if (apt.blockColor) return apt.blockColor;
   if (apt.status === 'completado') return '#2E6F5E';
@@ -87,6 +95,18 @@ export default function AgendaPage() {
   const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false);
   const [slotDefaultDate, setSlotDefaultDate] = useState<string | undefined>(undefined);
   const [slotDefaultTime, setSlotDefaultTime] = useState<string | undefined>(undefined);
+
+  // Drag & Drop States
+  const [draggedAppointment, setDraggedAppointment] = useState<Appointment | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<{
+    date: string;
+    hour: string;
+    subSlot: '00' | '30';
+  } | null>(null);
+  const [repositionToast, setRepositionToast] = useState<{
+    message: string;
+    visible: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const savedView = localStorage.getItem('adranna_agenda_view') as ViewMode | null;
@@ -213,6 +233,96 @@ export default function AgendaPage() {
     setIsNewAppointmentOpen(true);
   };
 
+  // Reprogramación por Arrastrar y Soltar (Drag & Drop)
+  const handleDropAppointment = async (
+    targetDate: string,
+    targetHour: string,
+    subSlot: '00' | '30'
+  ) => {
+    if (!draggedAppointment) return;
+    const hourPart = targetHour.slice(0, 2);
+    const newTime = `${hourPart}:${subSlot}`;
+
+    // Si no cambió ni de fecha ni de hora, no hacer nada
+    if (
+      draggedAppointment.date === targetDate &&
+      (draggedAppointment.time || '').startsWith(newTime)
+    ) {
+      setDraggedAppointment(null);
+      setDragOverTarget(null);
+      return;
+    }
+
+    const updatedApt: Appointment = {
+      ...draggedAppointment,
+      date: targetDate,
+      time: newTime,
+    };
+
+    // Actualización inmediata optimista en el estado
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === updatedApt.id ? updatedApt : a))
+    );
+    if (selectedAppointment?.id === updatedApt.id) {
+      setSelectedAppointment(updatedApt);
+    }
+    const clientName = updatedApt.clientName;
+    setDraggedAppointment(null);
+    setDragOverTarget(null);
+
+    // Notificación pro flotante
+    setRepositionToast({
+      message: `✓ Cita de ${clientName} movida a las ${formatTime12(newTime)} (${targetDate})`,
+      visible: true,
+    });
+    setTimeout(() => {
+      setRepositionToast((prev) => (prev ? { ...prev, visible: false } : null));
+    }, 3800);
+
+    // Guardar en Supabase y caché local
+    await dbService.updateAppointment(updatedApt.id, {
+      date: targetDate,
+      time: newTime,
+    });
+  };
+
+  const handleDropMonthAppointment = async (targetDate: string) => {
+    if (!draggedAppointment) return;
+    if (draggedAppointment.date === targetDate) {
+      setDraggedAppointment(null);
+      setDragOverTarget(null);
+      return;
+    }
+
+    const updatedApt: Appointment = {
+      ...draggedAppointment,
+      date: targetDate,
+    };
+
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === updatedApt.id ? updatedApt : a))
+    );
+    if (selectedAppointment?.id === updatedApt.id) {
+      setSelectedAppointment(updatedApt);
+    }
+    const clientName = updatedApt.clientName;
+    const timeFormatted = formatTime12(updatedApt.time);
+    setDraggedAppointment(null);
+    setDragOverTarget(null);
+
+    setRepositionToast({
+      message: `✓ Cita de ${clientName} movida al ${targetDate} a las ${timeFormatted}`,
+      visible: true,
+    });
+    setTimeout(() => {
+      setRepositionToast((prev) => (prev ? { ...prev, visible: false } : null));
+    }, 3800);
+
+    await dbService.updateAppointment(updatedApt.id, {
+      date: targetDate,
+    });
+  };
+
   // Navegación de fechas en el calendario
   const navigatePeriod = (dir: -1 | 1) => {
     if (calendarRange === 'dia') {
@@ -312,6 +422,122 @@ export default function AgendaPage() {
     }
     return d.toLocaleDateString('es-PE', { month: 'long', year: 'numeric' });
   }, [calendarRange, anchorDate, calendarDays]);
+
+  const renderAppointmentCard = (apt: Appointment, totalInSlot: number) => {
+    const bgColor = getBlockColor(apt);
+    const isDone = apt.status === 'completado';
+    const isBeingDragged = draggedAppointment?.id === apt.id;
+    const isSideBySide = totalInSlot > 1;
+
+    return (
+      <div
+        key={apt.id}
+        data-apt-card="true"
+        draggable={true}
+        onDragStart={(e) => {
+          setDraggedAppointment(apt);
+          e.dataTransfer.setData('text/plain', apt.id);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        onDragEnd={() => {
+          setDraggedAppointment(null);
+          setDragOverTarget(null);
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setSelectedAppointment(apt);
+        }}
+        style={{ backgroundColor: bgColor }}
+        className={`flex-1 min-w-0 rounded-xl p-2 text-white shadow-xs hover:shadow-lg transition-all duration-200 cursor-grab active:cursor-grabbing border border-white/20 flex flex-col justify-between gap-1 relative group/card select-none ${
+          isBeingDragged
+            ? 'opacity-30 scale-95 ring-2 ring-white border-dashed'
+            : 'hover:-translate-y-0.5 hover:brightness-105'
+        } ${isDone ? 'opacity-85' : ''}`}
+        title={`Arrastra para reprogramar • ${apt.clientName} - ${apt.serviceName} (${formatTime12(apt.time)})`}
+      >
+        {/* Barra superior con hora, iconos y botones de acción rápida en hover */}
+        <div className="flex items-center justify-between gap-1 min-w-0">
+          <div className="flex items-center gap-1 min-w-0">
+            <span
+              className="material-symbols-outlined text-[12px] opacity-60 group-hover/card:opacity-100 flex-shrink-0 cursor-grab active:cursor-grabbing"
+              title="Arrastra para mover"
+            >
+              drag_indicator
+            </span>
+            <span className="text-[10px] font-bold tracking-tight bg-black/25 px-1.5 py-0.2 rounded-md whitespace-nowrap">
+              {formatTime12(apt.time)}
+            </span>
+            {apt.hasMedicalAlert && (
+              <span
+                className="material-symbols-outlined text-[12px] text-amber-200 flex-shrink-0"
+                title="Alerta médica activa"
+              >
+                warning
+              </span>
+            )}
+            {isDone && (
+              <span
+                className="material-symbols-outlined text-[12px] text-emerald-200 flex-shrink-0"
+                title="Sesión completada"
+              >
+                task_alt
+              </span>
+            )}
+          </div>
+
+          {/* Acciones Rápidas flotantes en hover */}
+          <div className="opacity-0 group-hover/card:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity">
+            {!isDone && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  applyStatusChange(apt, 'completado');
+                }}
+                title="Finalizar sesión"
+                className="w-4 h-4 rounded bg-emerald-600/90 hover:bg-emerald-600 text-white flex items-center justify-center transition-colors shadow-2xs"
+              >
+                <span className="material-symbols-outlined text-[11px]">check</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEditAppointment(apt);
+              }}
+              title="Editar cita"
+              className="w-4 h-4 rounded bg-black/30 hover:bg-black/50 text-white flex items-center justify-center transition-colors shadow-2xs"
+            >
+              <span className="material-symbols-outlined text-[11px]">edit</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Nombre del Cliente y Servicio */}
+        <div className="min-w-0">
+          <h4 className={`font-bold text-white drop-shadow-2xs truncate ${isSideBySide ? 'text-[11px]' : 'text-xs'}`}>
+            {apt.clientName}
+          </h4>
+          <p className="text-[10px] text-white/90 truncate font-medium">
+            {apt.discipline === 'masaje' ? '💆‍♀️ ' : '🦶 '}
+            {apt.serviceName}
+          </p>
+        </div>
+
+        {/* Pie de la tarjeta: Profesional y Precio */}
+        <div className="flex items-center justify-between gap-1 text-[9px] text-white/90 pt-1 border-t border-white/20">
+          <span className="truncate flex items-center gap-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-white/70 flex-shrink-0"></span>
+            <span className="truncate">{apt.professionalName}</span>
+          </span>
+          <span className="font-bold flex-shrink-0 bg-white/20 px-1 py-0.2 rounded text-[9px]">
+            S/{apt.price}
+          </span>
+        </div>
+      </div>
+    );
+  };
 
   const todayISO = toISODate(new Date());
 
@@ -536,8 +762,8 @@ export default function AgendaPage() {
             </div>
           </div>
 
-          {/* Leyenda de Colores Personalizables */}
-          <div className="px-4 py-2 bg-surface-container-lowest border-b border-surface-container-high/60 flex items-center justify-between gap-2 flex-wrap text-[11px]">
+          {/* Leyenda de Colores Personalizables y Guía Pro */}
+          <div className="px-4 py-2.5 bg-surface-container-lowest border-b border-surface-container-high/60 flex items-center justify-between gap-3 flex-wrap text-[11px]">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-outline uppercase tracking-wider text-[10px]">
                 Colores de bloque:
@@ -549,9 +775,14 @@ export default function AgendaPage() {
                 </span>
               ))}
             </div>
-            <span className="text-[11px] text-outline">
-              💡 Haz clic en cualquier celda vacía para crear una cita en esa hora
-            </span>
+            <div className="flex items-center gap-2 text-outline text-[11px] font-medium flex-wrap">
+              <span className="flex items-center gap-1 text-primary font-bold">
+                <span className="material-symbols-outlined text-[15px]">drag_indicator</span>
+                Arrastra y suelta para reprogramar
+              </span>
+              <span>• Citas a las <strong>:30</strong> a la mitad del bloque</span>
+              <span>• Citas simultáneas <strong>lado a lado</strong></span>
+            </div>
           </div>
 
           {/* ── GRILLA EXCEL: DÍA / SEMANA / QUINCENA (HORAS × DÍAS) ─────────── */}
@@ -622,67 +853,168 @@ export default function AgendaPage() {
                         );
                         const isToday = dStr === todayISO;
 
+                        // Separar citas que inician en :00 (min 0 a 29) y en :30 (min 30 a 59)
+                        const topSlotApts = cellApts.filter(
+                          (a) => getMinutesOfTime(a.time) < 30
+                        );
+                        const bottomSlotApts = cellApts.filter(
+                          (a) => getMinutesOfTime(a.time) >= 30
+                        );
+
+                        const isHoveredTop =
+                          dragOverTarget?.date === dStr &&
+                          dragOverTarget?.hour === hour &&
+                          dragOverTarget?.subSlot === '00';
+
+                        const isHoveredBottom =
+                          dragOverTarget?.date === dStr &&
+                          dragOverTarget?.hour === hour &&
+                          dragOverTarget?.subSlot === '30';
+
                         return (
                           <td
                             key={`${dStr}-${hour}`}
-                            onClick={() => {
-                              if (cellApts.length === 0) {
-                                openNewAtSlot(dStr, hour);
-                              }
-                            }}
-                            className={`p-1 align-top border-r border-surface-container-high/70 min-h-[58px] h-14 transition-colors relative group/cell cursor-pointer ${
-                              isToday ? 'bg-primary-container/5' : ''
-                            } hover:bg-primary-container/10`}
+                            className={`p-1 align-top border-r border-surface-container-high/70 min-w-[150px] transition-colors relative group/cell ${
+                              isToday ? 'bg-primary-container/[0.04]' : ''
+                            }`}
                           >
-                            {/* Botón flotante '+' para agregar en esa celda incluso si ya hay 1 cita */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openNewAtSlot(dStr, hour);
-                              }}
-                              title={`Agendar el ${dStr} a las ${hour}`}
-                              className="opacity-0 group-hover/cell:opacity-100 absolute top-1 right-1 w-5 h-5 rounded-md bg-primary/90 text-white flex items-center justify-center shadow-xs transition-opacity z-10"
-                            >
-                              <span className="material-symbols-outlined text-[13px]">add</span>
-                            </button>
-
-                            <div className="flex flex-col gap-1">
-                              {cellApts.map((apt) => {
-                                const bgColor = getBlockColor(apt);
-                                const isDone = apt.status === 'completado';
-                                return (
-                                  <div
-                                    key={apt.id}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedAppointment(apt);
-                                    }}
-                                    style={{ backgroundColor: bgColor }}
-                                    className={`rounded-lg p-1.5 text-white shadow-2xs hover:brightness-110 transition-all cursor-pointer flex flex-col gap-0.5 border border-black/10 ${
-                                      isDone ? 'opacity-80' : ''
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between gap-1">
-                                      <span className="text-[10px] font-bold opacity-95 truncate">
-                                        {formatTime12(apt.time)} · {apt.clientName}
-                                      </span>
-                                      {isDone && (
-                                        <span className="material-symbols-outlined text-[12px] flex-shrink-0">
-                                          task_alt
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="text-[10px] opacity-90 truncate font-medium">
-                                      {apt.serviceName}
+                            <div className="flex flex-col min-h-[110px] justify-between relative gap-1">
+                              {/* ── SUB-SLOT SUPERIOR (:00 a :29) ── */}
+                              <div
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = 'move';
+                                  if (
+                                    dragOverTarget?.date !== dStr ||
+                                    dragOverTarget?.hour !== hour ||
+                                    dragOverTarget?.subSlot !== '00'
+                                  ) {
+                                    setDragOverTarget({ date: dStr, hour, subSlot: '00' });
+                                  }
+                                }}
+                                onDragLeave={(e) => {
+                                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                    if (
+                                      dragOverTarget?.date === dStr &&
+                                      dragOverTarget?.hour === hour &&
+                                      dragOverTarget?.subSlot === '00'
+                                    ) {
+                                      setDragOverTarget(null);
+                                    }
+                                  }
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  handleDropAppointment(dStr, hour, '00');
+                                }}
+                                onClick={(e) => {
+                                  if ((e.target as HTMLElement).closest('[data-apt-card]')) return;
+                                  openNewAtSlot(dStr, `${hour.slice(0, 2)}:00`);
+                                }}
+                                className={`min-h-[50px] flex-1 rounded-xl p-1 transition-all duration-150 flex flex-col justify-center relative cursor-pointer ${
+                                  isHoveredTop
+                                    ? 'bg-primary-container/25 ring-2 ring-primary border-2 border-dashed border-primary shadow-md'
+                                    : topSlotApts.length === 0
+                                    ? 'hover:bg-primary-container/10 border border-transparent hover:border-dashed hover:border-primary/30'
+                                    : ''
+                                }`}
+                              >
+                                {isHoveredTop && (
+                                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-primary/20 backdrop-blur-[1px] rounded-xl border-2 border-dashed border-primary pointer-events-none animate-in fade-in duration-150">
+                                    <span className="px-2 py-0.5 rounded-lg bg-primary text-white text-[10px] font-bold shadow-md flex items-center gap-1">
+                                      <span className="material-symbols-outlined text-[13px]">schedule</span>
+                                      <span>{formatTime12(`${hour.slice(0, 2)}:00`)}</span>
                                     </span>
-                                    <div className="flex items-center justify-between gap-1 text-[9px] opacity-85 pt-0.5 border-t border-white/15">
-                                      <span className="truncate">{apt.professionalName}</span>
-                                      <span className="font-bold flex-shrink-0">S/{apt.price}</span>
-                                    </div>
                                   </div>
-                                );
-                              })}
+                                )}
+
+                                {topSlotApts.length === 0 && !isHoveredTop && (
+                                  <div className="opacity-0 group-hover/cell:opacity-100 flex items-center justify-center gap-1 text-[10px] text-outline font-semibold transition-opacity pointer-events-none">
+                                    <span className="material-symbols-outlined text-[13px]">add</span>
+                                    <span>{formatTime12(`${hour.slice(0, 2)}:00`)}</span>
+                                  </div>
+                                )}
+
+                                {topSlotApts.length > 0 && (
+                                  <div className="flex flex-row gap-1.5 w-full h-full items-stretch">
+                                    {topSlotApts.map((apt) =>
+                                      renderAppointmentCard(apt, topSlotApts.length)
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* ── LÍNEA GUÍA DIVISIONAL DE MEDIO BLOQUE (:30) ── */}
+                              <div className="relative w-full border-t border-dashed border-outline-variant/35 flex items-center justify-end my-0.5 pointer-events-none">
+                                <span className="text-[8px] font-mono font-bold text-outline/50 px-1 rounded bg-surface-container-low/70 -mt-2">
+                                  :30
+                                </span>
+                              </div>
+
+                              {/* ── SUB-SLOT INFERIOR (:30 a :59) ── */}
+                              <div
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = 'move';
+                                  if (
+                                    dragOverTarget?.date !== dStr ||
+                                    dragOverTarget?.hour !== hour ||
+                                    dragOverTarget?.subSlot !== '30'
+                                  ) {
+                                    setDragOverTarget({ date: dStr, hour, subSlot: '30' });
+                                  }
+                                }}
+                                onDragLeave={(e) => {
+                                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                    if (
+                                      dragOverTarget?.date === dStr &&
+                                      dragOverTarget?.hour === hour &&
+                                      dragOverTarget?.subSlot === '30'
+                                    ) {
+                                      setDragOverTarget(null);
+                                    }
+                                  }
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  handleDropAppointment(dStr, hour, '30');
+                                }}
+                                onClick={(e) => {
+                                  if ((e.target as HTMLElement).closest('[data-apt-card]')) return;
+                                  openNewAtSlot(dStr, `${hour.slice(0, 2)}:30`);
+                                }}
+                                className={`min-h-[50px] flex-1 rounded-xl p-1 transition-all duration-150 flex flex-col justify-center relative cursor-pointer ${
+                                  isHoveredBottom
+                                    ? 'bg-primary-container/25 ring-2 ring-primary border-2 border-dashed border-primary shadow-md'
+                                    : bottomSlotApts.length === 0
+                                    ? 'hover:bg-primary-container/10 border border-transparent hover:border-dashed hover:border-primary/30'
+                                    : ''
+                                }`}
+                              >
+                                {isHoveredBottom && (
+                                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-primary/20 backdrop-blur-[1px] rounded-xl border-2 border-dashed border-primary pointer-events-none animate-in fade-in duration-150">
+                                    <span className="px-2 py-0.5 rounded-lg bg-primary text-white text-[10px] font-bold shadow-md flex items-center gap-1">
+                                      <span className="material-symbols-outlined text-[13px]">schedule</span>
+                                      <span>{formatTime12(`${hour.slice(0, 2)}:30`)}</span>
+                                    </span>
+                                  </div>
+                                )}
+
+                                {bottomSlotApts.length === 0 && !isHoveredBottom && (
+                                  <div className="opacity-0 group-hover/cell:opacity-100 flex items-center justify-center gap-1 text-[10px] text-outline font-semibold transition-opacity pointer-events-none">
+                                    <span className="material-symbols-outlined text-[13px]">add</span>
+                                    <span>{formatTime12(`${hour.slice(0, 2)}:30`)}</span>
+                                  </div>
+                                )}
+
+                                {bottomSlotApts.length > 0 && (
+                                  <div className="flex flex-row gap-1.5 w-full h-full items-stretch">
+                                    {bottomSlotApts.map((apt) =>
+                                      renderAppointmentCard(apt, bottomSlotApts.length)
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </td>
                         );
@@ -713,16 +1045,41 @@ export default function AgendaPage() {
                       .filter((a) => (a.date || todayISO) === cell.dateStr)
                       .sort((a, b) => a.time.localeCompare(b.time));
                     const isToday = cell.dateStr === todayISO;
+                    const isHovered = dragOverTarget?.date === cell.dateStr;
 
                     return (
                       <div
                         key={cell.dateStr}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (dragOverTarget?.date !== cell.dateStr) {
+                            setDragOverTarget({ date: cell.dateStr, hour: '10:00', subSlot: '00' });
+                          }
+                        }}
+                        onDragLeave={(e) => {
+                          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                            if (dragOverTarget?.date === cell.dateStr) {
+                              setDragOverTarget(null);
+                            }
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          handleDropMonthAppointment(cell.dateStr);
+                        }}
                         onClick={() => openNewAtSlot(cell.dateStr, '10:00')}
-                        className={`min-h-[115px] p-1.5 flex flex-col gap-1 transition-colors cursor-pointer group/mcell ${
+                        className={`min-h-[115px] p-1.5 flex flex-col gap-1 transition-all cursor-pointer group/mcell relative ${
                           cell.isCurrentMonth
                             ? 'bg-surface-container-lowest'
                             : 'bg-surface-container-low/50 opacity-60'
-                        } ${isToday ? 'ring-2 ring-inset ring-primary/50 bg-primary-container/5' : ''} hover:bg-primary-container/10`}
+                        } ${
+                          isHovered
+                            ? 'ring-2 ring-primary bg-primary-container/20 border-2 border-dashed border-primary shadow-sm'
+                            : isToday
+                            ? 'ring-2 ring-inset ring-primary/50 bg-primary-container/5'
+                            : ''
+                        } hover:bg-primary-container/10`}
                       >
                         <div className="flex items-center justify-between">
                           <span
@@ -750,18 +1107,40 @@ export default function AgendaPage() {
                         <div className="flex flex-col gap-1 overflow-y-auto max-h-[88px]">
                           {dayApts.map((apt) => {
                             const bgColor = getBlockColor(apt);
+                            const isBeingDragged = draggedAppointment?.id === apt.id;
                             return (
                               <div
                                 key={apt.id}
+                                draggable={true}
+                                onDragStart={(e) => {
+                                  setDraggedAppointment(apt);
+                                  e.dataTransfer.setData('text/plain', apt.id);
+                                  e.dataTransfer.effectAllowed = 'move';
+                                }}
+                                onDragEnd={() => {
+                                  setDraggedAppointment(null);
+                                  setDragOverTarget(null);
+                                }}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedAppointment(apt);
                                 }}
                                 style={{ backgroundColor: bgColor }}
-                                className="px-1.5 py-1 rounded text-[10px] text-white font-semibold truncate shadow-2xs hover:brightness-110"
-                                title={`${formatTime12(apt.time)} - ${apt.clientName} (${apt.serviceName})`}
+                                className={`px-2 py-1 rounded-lg text-[10px] text-white font-semibold shadow-2xs hover:brightness-110 cursor-grab active:cursor-grabbing flex items-center justify-between gap-1 transition-all ${
+                                  isBeingDragged
+                                    ? 'opacity-30 scale-95 border border-dashed border-white'
+                                    : ''
+                                }`}
+                                title={`Arrastra a otro día • ${formatTime12(apt.time)} - ${apt.clientName} (${apt.serviceName})`}
                               >
-                                {formatTime12(apt.time)} {apt.clientName}
+                                <span className="truncate flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[10px] opacity-70">drag_indicator</span>
+                                  <span className="font-bold">{formatTime12(apt.time)}</span>
+                                  <span className="truncate">{apt.clientName}</span>
+                                </span>
+                                <span className="text-[9px] opacity-90 font-bold flex-shrink-0">
+                                  S/{apt.price}
+                                </span>
                               </div>
                             );
                           })}
@@ -979,6 +1358,16 @@ export default function AgendaPage() {
         defaultDate={slotDefaultDate}
         defaultTime={slotDefaultTime}
       />
+
+      {/* Toast flotante interactivo de confirmación de reprogramación */}
+      {repositionToast && repositionToast.visible && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[100] bg-primary text-white px-5 py-3 rounded-2xl shadow-2xl border border-white/20 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <span className="w-6 h-6 rounded-full bg-emerald-500/25 text-emerald-300 flex items-center justify-center flex-shrink-0">
+            <span className="material-symbols-outlined text-[16px]">check_circle</span>
+          </span>
+          <span className="text-xs font-bold tracking-tight">{repositionToast.message}</span>
+        </div>
+      )}
     </div>
   );
 }
