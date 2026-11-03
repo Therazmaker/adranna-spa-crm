@@ -1525,13 +1525,20 @@ function mapAppointment(a: any): Appointment {
   const isMasaje = rawDiscipline === 'masaje' || /masaj|corporal|relaj|descontract|piedras|reduct/i.test(a.service_name || '');
   const discipline: 'podologia' | 'masaje' = isMasaje ? 'masaje' : 'podologia';
 
+  const rawPrice = Number(a.price) || 0;
+  const prodTotal = Number(meta.productsTotal) || 0;
+  const parsedServicePrice =
+    meta.servicePrice !== undefined && Number(meta.servicePrice) > 0
+      ? Number(meta.servicePrice)
+      : Math.max(0, rawPrice - prodTotal);
+
   return {
     id: a.id, clientId: a.client_id, clientName: a.client_name,
     clientPhone: a.client_phone || '', professionalName: a.professional_name,
     professionalRole: a.professional_role || '', discipline,
     cabinId: 'cab-1', cabinName: a.cabin_name, serviceName: a.service_name,
-    durationMinutes: a.duration_minutes || 45, price: Number(a.price) || 0,
-    servicePrice: meta.servicePrice,
+    durationMinutes: a.duration_minutes || 45, price: rawPrice,
+    servicePrice: parsedServicePrice,
     soldProducts: meta.soldProducts,
     productsTotal: meta.productsTotal,
     paymentMethod: meta.paymentMethod || 'efectivo',

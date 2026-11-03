@@ -30,6 +30,7 @@ export default function FinalizeSessionModal({
   const [sessionNotes, setSessionNotes] = useState('');
   const [sessionProcedure, setSessionProcedure] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('efectivo');
+  const [servicePriceInput, setServicePriceInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
   // Quick product creation inline
@@ -48,13 +49,20 @@ export default function FinalizeSessionModal({
       setPaymentMethod(appointment.paymentMethod || 'efectivo');
       setShowQuickCreate(false);
       dbService.getInventory().then(setInventory);
+
+      // Calcular precio base del servicio de forma inteligente:
+      // Si appointment.servicePrice > 0, tomarlo. De lo contrario, usar appointment.price
+      const rawPrice =
+        appointment.servicePrice && appointment.servicePrice > 0
+          ? appointment.servicePrice
+          : Number(appointment.price) || 0;
+      setServicePriceInput(rawPrice > 0 ? String(rawPrice) : '');
     }
   }, [appointment]);
 
   if (!appointment) return null;
 
-  const baseServicePrice =
-    appointment.servicePrice !== undefined ? appointment.servicePrice : Number(appointment.price) || 0;
+  const baseServicePrice = Number(servicePriceInput) || 0;
 
   const soldProducts: SoldProductItem[] = Object.entries(cart)
     .filter(([, qty]) => qty > 0)
@@ -200,13 +208,26 @@ export default function FinalizeSessionModal({
 
         {/* Resumen Servicio + Ficha Clínica (FECHA | OBSERVACIONES | PROCEDIMIENTO) */}
         <div className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container-high space-y-3">
-          <div className="flex items-center justify-between text-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
             <span className="text-on-surface-variant font-medium">
               Atendido por: <strong className="text-on-surface">{appointment.professionalName}</strong> ({appointment.date} · {appointment.time})
             </span>
-            <span className="font-serif text-sm font-bold text-primary">
-              S/ {baseServicePrice.toFixed(2)}
-            </span>
+            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              <span className="text-[11px] font-bold text-on-surface-variant">Precio del Servicio:</span>
+              <div className="relative flex items-center">
+                <span className="absolute left-2.5 text-xs font-bold text-primary">S/</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={servicePriceInput}
+                  onChange={(e) => setServicePriceInput(e.target.value)}
+                  placeholder="0.00"
+                  title="Puedes ajustar el precio del servicio si es necesario"
+                  className="w-24 pl-7 pr-2.5 py-1 rounded-xl bg-surface-container-lowest border-2 border-primary/40 focus:border-primary text-xs font-bold font-serif text-primary text-right focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Tabla Estilo Ficha Clínica Física: FECHA | OBSERVACIONES | PROCEDIMIENTO */}

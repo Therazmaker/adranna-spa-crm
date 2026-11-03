@@ -179,6 +179,14 @@ export default function NewAppointmentModal({
     const numericPrice = Number(price) || 0;
     const numericDuration = Number(duration) || 45;
 
+    // Si la cita ya tenía productos asociados, el servicePrice es el precio base del servicio.
+    // De lo contrario, el precio ingresado en este formulario corresponde directamente al precio del servicio.
+    const prevProdTotal = editingAppointment?.productsTotal || 0;
+    const computedServicePrice =
+      prevProdTotal > 0
+        ? Math.max(0, numericPrice - prevProdTotal)
+        : numericPrice;
+
     const base = {
       clientId: client.id,
       clientName: client.name,
@@ -191,7 +199,7 @@ export default function NewAppointmentModal({
       serviceName: serviceName.trim(),
       durationMinutes: numericDuration,
       price: numericPrice,
-      servicePrice: editingAppointment?.servicePrice ?? numericPrice,
+      servicePrice: computedServicePrice,
       soldProducts: editingAppointment?.soldProducts,
       productsTotal: editingAppointment?.productsTotal,
       blockColor,
