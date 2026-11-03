@@ -100,6 +100,7 @@ export interface FootFinding {
   severity: 'Agudo' | 'Crónico' | 'Seguimiento';
   description: string;
   markerCoords: { x: number; y: number }; // percentage coords on foot canvas
+  date?: string; // YYYY-MM-DD - Fecha en la que se encontró/diagnosticó el hallazgo
 }
 
 export interface PhotoComparison {

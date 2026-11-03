@@ -49,6 +49,8 @@ export default function NewAppointmentModal({
 
   // Form State
   const [selectedClientId, setSelectedClientId] = useState('');
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const [discipline, setDiscipline] = useState<'podologia' | 'masaje' | 'manicura'>('podologia');
   const [serviceName, setServiceName] = useState('');
   const [time, setTime] = useState('10:00');
@@ -72,6 +74,9 @@ export default function NewAppointmentModal({
 
     if (editingAppointment) {
       setSelectedClientId(editingAppointment.clientId);
+      const foundClient = clients.find((c) => c.id === editingAppointment.clientId);
+      setClientSearchQuery(foundClient ? foundClient.name : editingAppointment.clientName || '');
+      setIsClientDropdownOpen(false);
       setDiscipline((editingAppointment.discipline as 'podologia' | 'masaje' | 'manicura') || 'podologia');
       setServiceName(editingAppointment.serviceName);
       setTime(editingAppointment.time);
@@ -86,7 +91,11 @@ export default function NewAppointmentModal({
       setCustomTag(editingAppointment.customTag || '');
       setTagColor(editingAppointment.tagColor || '#D97706');
     } else {
-      setSelectedClientId((prev) => prev || clients[0]?.id || '');
+      const initialClient = clients.find((c) => c.id === selectedClientId) || clients[0];
+      const initialId = initialClient?.id || '';
+      setSelectedClientId(initialId);
+      setClientSearchQuery(initialClient ? initialClient.name : '');
+      setIsClientDropdownOpen(false);
       setDiscipline('podologia');
       setTime(defaultTime || '10:00');
       setDate(defaultDate || todayStr());
@@ -166,7 +175,21 @@ export default function NewAppointmentModal({
 
   if (!isOpen) return null;
 
-  const client = clients.find((c) => c.id === selectedClientId) || clients[0];
+  const filteredClients = clients.filter((c) => {
+    const q = clientSearchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.name.toLowerCase().includes(q) ||
+      (c.phone && c.phone.toLowerCase().includes(q)) ||
+      (c.email && c.email.toLowerCase().includes(q))
+    );
+  });
+
+  const client =
+    clients.find((c) => c.id === selectedClientId) ||
+    clients.find((c) => c.name.toLowerCase() === clientSearchQuery.trim().toLowerCase()) ||
+    filteredClients[0] ||
+    clients[0];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,17 +298,127 @@ export default function NewAppointmentModal({
                 No hay pacientes registrados aún. Primero agrega un paciente en el Directorio.
               </p>
             ) : (
-              <select
-                value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
-                className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-sm font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.hasMedicalAlert ? '⚠️ (Alerta Médica)' : ''}
-                  </option>
-                ))}
-              </select>
+              <div className="relative space-y-1.5">
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">
+                    search
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Escribe el nombre o teléfono del paciente..."
+                    value={clientSearchQuery}
+                    onFocus={() => setIsClientDropdownOpen(true)}
+                    onChange={(e) => {
+                      setClientSearchQuery(e.target.value);
+                      setIsClientDropdownOpen(true);
+                    }}
+                    className="w-full bg-surface-container-low border border-surface-container-high rounded-xl pl-9 pr-16 py-2.5 text-sm font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary shadow-2xs"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {clientSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClientSearchQuery('');
+                          setIsClientDropdownOpen(true);
+                        }}
+                        className="w-6 h-6 rounded-full hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center text-xs"
+                        title="Borrar búsqueda"
+                      >
+                        ✕
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsClientDropdownOpen((v) => !v)}
+                      className="w-7 h-7 rounded-lg hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center"
+                      title="Ver lista de pacientes"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        {isClientDropdownOpen ? 'expand_less' : 'expand_more'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dropdown interactivo con lista filtrada en tiempo real */}
+                {isClientDropdownOpen && (
+                  <div className="absolute z-30 left-0 right-0 mt-1 bg-surface-container-lowest border-2 border-primary/20 rounded-xl shadow-lg max-h-56 overflow-y-auto divide-y divide-surface-container-high/60 animate-fadeIn">
+                    {filteredClients.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-outline space-y-1">
+                        <p>No se encontró ningún paciente con &quot;{clientSearchQuery}&quot;</p>
+                        <Link
+                          href="/clientes"
+                          onClick={onClose}
+                          className="inline-block text-primary font-bold hover:underline"
+                        >
+                          + Registrar nuevo paciente
+                        </Link>
+                      </div>
+                    ) : (
+                      filteredClients.map((c) => {
+                        const isSelected = c.id === selectedClientId;
+                        return (
+                          <div
+                            key={c.id}
+                            onClick={() => {
+                              setSelectedClientId(c.id);
+                              setClientSearchQuery(c.name);
+                              setIsClientDropdownOpen(false);
+                            }}
+                            className={`p-2.5 px-3 flex items-center justify-between gap-2 cursor-pointer transition-colors ${
+                              isSelected
+                                ? 'bg-primary/10 text-primary font-bold'
+                                : 'hover:bg-surface-container-low text-on-surface'
+                            }`}
+                          >
+                            <div className="min-w-0 flex items-center gap-2">
+                              <span className="material-symbols-outlined text-[18px] text-outline">
+                                person
+                              </span>
+                              <div className="truncate">
+                                <span className="text-xs font-semibold block truncate">
+                                  {c.name}
+                                </span>
+                                {c.phone && (
+                                  <span className="text-[10px] text-outline font-normal">
+                                    {c.phone}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {c.hasMedicalAlert && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-0.5">
+                                  <span>⚠️</span>
+                                  <span>Alerta Médica</span>
+                                </span>
+                              )}
+                              {isSelected && (
+                                <span className="material-symbols-outlined text-[16px] text-primary">
+                                  check
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                {/* Confirmación del paciente seleccionado */}
+                {client && selectedClientId && (
+                  <div className="flex items-center justify-between text-[11px] text-outline px-1">
+                    <span>
+                      Seleccionado: <strong className="text-on-surface">{client.name}</strong>
+                    </span>
+                    {client.phone && <span>{client.phone}</span>}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

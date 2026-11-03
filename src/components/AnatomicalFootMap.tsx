@@ -87,6 +87,7 @@ export default function AnatomicalFootMap({
         ? `Hallazgo #${newNumber} (Dorsal - Pie ${foot === 'derecho' ? 'Der.' : 'Izq.'})`
         : `Hallazgo #${newNumber} (Plantar - Pie ${foot === 'derecho' ? 'Der.' : 'Izq.'})`;
 
+    const today = new Date().toISOString().split('T')[0];
     const newFinding: FootFinding = {
       id: `f-${Date.now()}`,
       markerNumber: newNumber,
@@ -97,6 +98,7 @@ export default function AnatomicalFootMap({
       severity: 'Seguimiento',
       description: `Ubicado en ${activeView === 'dorsal' ? 'empeine / uña dorsal' : 'planta / apoyo plantar'}.`,
       markerCoords: { x, y },
+      date: today,
     };
 
     onAddFinding(newFinding);
@@ -569,7 +571,25 @@ export default function AnatomicalFootMap({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+            <div>
+              <label className="text-xs font-bold text-on-surface-variant block mb-1">
+                Fecha del Hallazgo *
+              </label>
+              <input
+                type="date"
+                required
+                value={editingFinding.date || new Date().toISOString().split('T')[0]}
+                onChange={(e) =>
+                  setEditingFinding({
+                    ...editingFinding,
+                    date: e.target.value,
+                  })
+                }
+                className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2 text-xs font-semibold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
             <div>
               <label className="text-xs font-bold text-on-surface-variant block mb-1">
                 Pie Afectado
@@ -728,6 +748,12 @@ export default function AnatomicalFootMap({
                     <h5 className="font-semibold text-sm text-on-surface truncate">
                       {finding.title}
                     </h5>
+                    {finding.date && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[12px]">calendar_today</span>
+                        <span>{finding.date}</span>
+                      </span>
+                    )}
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         finding.view === 'plantar'

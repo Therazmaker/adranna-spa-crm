@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { dbService } from '@/lib/dbService';
-import { Appointment, Client } from '@/types/database';
+import { Appointment, Client, InventoryProduct, SoldProductItem } from '@/types/database';
 import { formatTime12 } from '@/lib/timeUtils';
 import { getLocalDateStr, addDaysLocal } from '@/lib/dateUtils';
 
@@ -43,6 +43,9 @@ export default function PacienteGeneralPage() {
   const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
   const [editObs, setEditObs] = useState('');
   const [editProc, setEditProc] = useState('');
+  const [editProducts, setEditProducts] = useState<SoldProductItem[]>([]);
+  const [selectedEditProdId, setSelectedEditProdId] = useState('');
+  const [editProdQty, setEditProdQty] = useState(1);
   const [isSavingVisitEdit, setIsSavingVisitEdit] = useState(false);
 
   // Agregar registro directo a la tabla clínica (ej. transcribir ficha física)
@@ -50,13 +53,23 @@ export default function PacienteGeneralPage() {
   const [manualDate, setManualDate] = useState(() => getLocalDateStr());
   const [manualObs, setManualObs] = useState('');
   const [manualProc, setManualProc] = useState('');
+  const [manualProducts, setManualProducts] = useState<SoldProductItem[]>([]);
+  const [selectedManualProdId, setSelectedManualProdId] = useState('');
+  const [manualProdQty, setManualProdQty] = useState(1);
   const [isSavingManualRow, setIsSavingManualRow] = useState(false);
+
+  // Inventario disponible
+  const [inventory, setInventory] = useState<InventoryProduct[]>([]);
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([dbService.getClients(), dbService.getAppointments()]).then(
-      ([clients, allAppointments]) => {
-        if (!mounted) return;
+    Promise.all([
+      dbService.getClients(),
+      dbService.getAppointments(),
+      dbService.getInventory(),
+    ]).then(([clients, allAppointments, inv]) => {
+      if (!mounted) return;
+      setInventory(inv);
         const found = clients.find((c) => c.id === clientId) || clients[0] || null;
         setClient(found);
 
@@ -146,14 +159,126 @@ export default function PacienteGeneralPage() {
     setEditingVisitId(visit.id);
     setEditObs(visit.notes || '');
     setEditProc(visit.procedure || visit.serviceName || '');
+    setEditProducts(visit.soldProducts ? [...visit.soldProducts] : []);
+    setSelectedEditProdId('');
+    setEditProdQty(1);
+  };
+
+  const handleAddManualProduct = () => {
+    if (!selectedManualProdId) return;
+    const prod = inventory.find((p) => p.id === selectedManualProdId);
+    if (!prod) return;
+    setManualProducts((prev) => {
+      const existingIndex = prev.findIndex((p) => p.productId === prod.id);
+      if (existingIndex >= 0) {
+        const copy = [...prev];
+        copy[existingIndex].quantity += manualProdQty;
+        return copy;
+      }
+      return [
+        ...prev,
+        {
+          productId: prod.id,
+          name: prod.name,
+          presentation: prod.presentation,
+          unitPrice: prod.price,
+          quantity: manualProdQty,
+        },
+      ];
+    });
+    setSelectedManualProdId('');
+    setManualProdQty(1);
+  };
+
+  const handleRemoveManualProduct = (index: number) => {
+    setManualProducts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddEditProduct = () => {
+    if (!selectedEditProdId) return;
+    const prod = inventory.find((p) => p.id === selectedEditProdId);
+    if (!prod) return;
+    setEditProducts((prev) => {
+      const existingIndex = prev.findIndex((p) => p.productId === prod.id);
+      if (existingIndex >= 0) {
+        const copy = [...prev];
+        copy[existingIndex].quantity += editProdQty;
+        return copy;
+      }
+      return [
+        ...prev,
+        {
+          productId: prod.id,
+          name: prod.name,
+          presentation: prod.presentation,
+          unitPrice: prod.price,
+          quantity: editProdQty,
+        },
+      ];
+    });
+    setSelectedEditProdId('');
+    setEditProdQty(1);
+  };
+
+  const handleRemoveEditProduct = (index: number) => {
+    setEditProducts((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSaveVisitEdit = async (visitId: string) => {
     setIsSavingVisitEdit(true);
+    const originalVisit = visits.find((v) => v.id === visitId);
+
+    const newProdTotal = editProducts.reduce(
+      (sum, p) => sum + p.unitPrice * p.quantity,
+      0
+    );
+
+    // Ajuste de stock en inventario
+    const oldProducts = originalVisit?.soldProducts || [];
+    for (const newItem of editProducts) {
+      const oldItem = oldProducts.find((p) => p.productId === newItem.productId);
+      const diff = newItem.quantity - (oldItem ? oldItem.quantity : 0);
+      if (diff > 0) {
+        const found = inventory.find((p) => p.id === newItem.productId);
+        if (found && found.stock !== undefined) {
+          await dbService.updateInventoryProduct(found.id, {
+            stock: Math.max(0, found.stock - diff),
+          });
+        }
+      }
+    }
+    for (const oldItem of oldProducts) {
+      const newItem = editProducts.find((p) => p.productId === oldItem.productId);
+      const diff = (newItem ? newItem.quantity : 0) - oldItem.quantity;
+      if (diff < 0) {
+        const found = inventory.find((p) => p.id === oldItem.productId);
+        if (found && found.stock !== undefined) {
+          await dbService.updateInventoryProduct(found.id, {
+            stock: found.stock + Math.abs(diff),
+          });
+        }
+      }
+    }
+    dbService.getInventory().then(setInventory);
+
+    // Recalcular precio total de la visita respetando el precio base del servicio
+    const baseServicePrice =
+      originalVisit?.servicePrice ??
+      (originalVisit?.productsTotal
+        ? Math.max(0, (Number(originalVisit.price) || 0) - originalVisit.productsTotal)
+        : Number(originalVisit?.price) || 0);
+
+    const updatedPrice = baseServicePrice + newProdTotal;
+
     const updates: Partial<Appointment> = {
       notes: editObs.trim() || undefined,
       procedure: editProc.trim() || undefined,
+      soldProducts: editProducts.length > 0 ? editProducts : undefined,
+      productsTotal: newProdTotal > 0 ? newProdTotal : undefined,
+      price: updatedPrice,
+      servicePrice: baseServicePrice,
     };
+
     await dbService.updateAppointment(visitId, updates);
     setVisits((prev) =>
       prev.map((v) => (v.id === visitId ? { ...v, ...updates } : v))
@@ -164,8 +289,26 @@ export default function PacienteGeneralPage() {
 
   const handleAddManualClinicalRow = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!manualObs.trim() && !manualProc.trim()) || isSavingManualRow) return;
+    if ((!manualObs.trim() && !manualProc.trim() && manualProducts.length === 0) || isSavingManualRow) return;
     setIsSavingManualRow(true);
+
+    const productsTotal = manualProducts.reduce(
+      (sum, p) => sum + p.unitPrice * p.quantity,
+      0
+    );
+
+    // Descontar inventario si llevó productos
+    if (manualProducts.length > 0) {
+      for (const item of manualProducts) {
+        const found = inventory.find((p) => p.id === item.productId);
+        if (found && found.stock !== undefined) {
+          const nextStock = Math.max(0, found.stock - item.quantity);
+          await dbService.updateInventoryProduct(found.id, { stock: nextStock });
+        }
+      }
+      dbService.getInventory().then(setInventory);
+    }
+
     const created = await dbService.createAppointment({
       clientId: client.id,
       clientName: client.name,
@@ -175,9 +318,13 @@ export default function PacienteGeneralPage() {
       discipline: 'podologia',
       cabinId: 'cab-1',
       cabinName: 'Cabina 1',
-      serviceName: manualProc.split('\n')[0]?.replace(/^[-•]\s*/, '') || 'Atención Clínica',
+      serviceName:
+        manualProc.split('\n')[0]?.replace(/^[-•]\s*/, '') ||
+        (manualProducts.length > 0 ? 'Venta de Productos / Control' : 'Atención Clínica'),
       durationMinutes: 45,
-      price: 0,
+      price: productsTotal,
+      productsTotal: productsTotal > 0 ? productsTotal : undefined,
+      soldProducts: manualProducts.length > 0 ? manualProducts : undefined,
       status: 'completado',
       date: manualDate,
       time: '10:00',
@@ -189,6 +336,7 @@ export default function PacienteGeneralPage() {
     }
     setManualObs('');
     setManualProc('');
+    setManualProducts([]);
     setShowAddManualRow(false);
     setIsSavingManualRow(false);
   };
@@ -409,6 +557,80 @@ export default function PacienteGeneralPage() {
               </div>
             </div>
 
+            {/* Sección de Productos llevados en la atención */}
+            <div className="p-3 bg-surface-container-lowest border border-surface-container-high/80 rounded-xl space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-[11px] font-bold text-on-surface flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-emerald-600">shopping_bag</span>
+                  <span>Productos que llevó el cliente (Opcional):</span>
+                </span>
+                {manualProducts.length > 0 && (
+                  <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                    Total Productos: S/ {manualProducts.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0).toFixed(2)}
+                  </span>
+                )}
+              </div>
+
+              {/* Selector para agregar producto */}
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                <select
+                  value={selectedManualProdId}
+                  onChange={(e) => setSelectedManualProdId(e.target.value)}
+                  className="flex-1 min-w-[200px] bg-surface-container-low border border-surface-container-high rounded-xl px-2.5 py-1.5 text-xs font-semibold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">-- Seleccionar producto del inventario --</option>
+                  {inventory.map((prod) => (
+                    <option key={prod.id} value={prod.id}>
+                      {prod.name} ({prod.presentation}) - S/ {prod.price} {prod.stock !== undefined ? `[Stock: ${prod.stock}]` : ''}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex items-center gap-1.5">
+                  <label className="text-[10px] font-bold text-outline">Cant:</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={manualProdQty}
+                    onChange={(e) => setManualProdQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-16 bg-surface-container-low border border-surface-container-high rounded-xl px-2 py-1.5 text-xs font-bold text-center text-on-surface"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddManualProduct}
+                    disabled={!selectedManualProdId}
+                    className="px-3 py-1.5 rounded-xl bg-primary/10 text-primary hover:bg-primary hover:text-white border border-primary/20 text-xs font-bold flex items-center gap-1 transition-colors disabled:opacity-40"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">add</span>
+                    <span>Agregar</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Lista de productos seleccionados */}
+              {manualProducts.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {manualProducts.map((item, idx) => (
+                    <span
+                      key={`${item.productId}-${idx}`}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-950"
+                    >
+                      <span>🛍️ {item.quantity}x {item.name} ({item.presentation})</span>
+                      <span className="text-[11px] text-emerald-700 font-semibold">S/ {(item.unitPrice * item.quantity).toFixed(2)}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveManualProduct(idx)}
+                        className="w-4 h-4 rounded-full hover:bg-error-container text-error flex items-center justify-center text-[13px] ml-0.5"
+                        title="Quitar producto"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -507,14 +729,25 @@ export default function PacienteGeneralPage() {
                         </span>
 
                         {!isEditing && (
-                          <button
-                            type="button"
-                            onClick={() => startEditingVisit(visit)}
-                            className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5 mt-0.5"
-                          >
-                            <span className="material-symbols-outlined text-[13px]">edit</span>
-                            <span>Editar</span>
-                          </button>
+                          <div className="flex flex-col items-center gap-1 mt-0.5">
+                            <button
+                              type="button"
+                              onClick={() => startEditingVisit(visit)}
+                              className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">edit</span>
+                              <span>Editar</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startEditingVisit(visit)}
+                              className="text-[10px] font-bold text-emerald-700 hover:underline flex items-center gap-0.5"
+                              title="Gestionar o agregar productos llevados"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">shopping_bag</span>
+                              <span>+ Producto</span>
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -564,13 +797,86 @@ export default function PacienteGeneralPage() {
                         {isEditing ? (
                           <div className="space-y-2">
                             <textarea
-                              rows={4}
+                              rows={3}
                               value={editProc}
                               onChange={(e) => setEditProc(e.target.value)}
                               placeholder={'- Profilaxis\n- Se le recomendó ortésicos\n- Des. calzado, antisudoral, ciclopirox'}
                               className="w-full bg-surface-container-lowest border border-primary rounded-xl p-2.5 text-xs font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
                             />
-                            <div className="flex justify-end gap-1.5">
+
+                            {/* Gestión de Productos en la Visita */}
+                            <div className="p-2.5 bg-surface-container-low border border-primary/20 rounded-xl space-y-2">
+                              <div className="flex items-center justify-between flex-wrap gap-1">
+                                <span className="text-[11px] font-bold text-on-surface flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[15px] text-emerald-600">shopping_bag</span>
+                                  <span>Productos llevados en esta atención:</span>
+                                </span>
+                                {editProducts.length > 0 && (
+                                  <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                    Subtotal: S/ {editProducts.reduce((s, p) => s + p.unitPrice * p.quantity, 0).toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <select
+                                  value={selectedEditProdId}
+                                  onChange={(e) => setSelectedEditProdId(e.target.value)}
+                                  className="flex-1 min-w-[170px] bg-surface-container-lowest border border-surface-container-high rounded-lg px-2 py-1 text-xs font-semibold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                                >
+                                  <option value="">-- Agregar producto del inventario --</option>
+                                  {inventory.map((prod) => (
+                                    <option key={prod.id} value={prod.id}>
+                                      {prod.name} ({prod.presentation}) - S/ {prod.price} {prod.stock !== undefined ? `[Stock: ${prod.stock}]` : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={editProdQty}
+                                    onChange={(e) => setEditProdQty(Math.max(1, parseInt(e.target.value) || 1))}
+                                    className="w-14 bg-surface-container-lowest border border-surface-container-high rounded-lg px-1.5 py-1 text-xs font-bold text-center text-on-surface"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleAddEditProduct}
+                                    disabled={!selectedEditProdId}
+                                    className="px-2.5 py-1 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 text-xs font-bold flex items-center gap-0.5 disabled:opacity-40"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">add</span>
+                                    <span>Añadir</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {editProducts.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {editProducts.map((item, idx) => (
+                                    <span
+                                      key={`${item.productId}-${idx}`}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px] font-bold text-emerald-950"
+                                    >
+                                      <span>{item.quantity}x {item.name}</span>
+                                      <span className="text-emerald-700 font-semibold">(S/ {(item.unitPrice * item.quantity).toFixed(2)})</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveEditProduct(idx)}
+                                        className="w-3.5 h-3.5 rounded-full hover:bg-error-container text-error flex items-center justify-center text-[12px] ml-0.5 font-bold"
+                                        title="Eliminar producto"
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-[10px] text-outline italic">No tiene productos asociados aún.</p>
+                              )}
+                            </div>
+
+                            <div className="flex justify-end gap-1.5 pt-1">
                               <button
                                 type="button"
                                 onClick={() => setEditingVisitId(null)}
