@@ -72,17 +72,27 @@ export default function DashboardPage() {
     return getDiscipline(apt) === filterDiscipline;
   });
 
-  const countHoy = byDiscipline.filter((a) => (a.date || todayStr) === todayStr).length;
-  const countProximas = byDiscipline.filter((a) => (a.date || todayStr) >= todayStr).length;
-  const countTodas = byDiscipline.length;
-
-  const byDateScope = byDiscipline.filter((apt) => {
-    if (dateScope === 'todas') return true;
+  // Hoy: exclusivamente fecha de hoy
+  // Próximas: exclusivamente fechas futuras (sin incluir hoy)
+  // Todas: hoy + próximas (sin citas de días pasados)
+  const matchesScope = (apt: Appointment, scope: 'hoy' | 'proximas' | 'todas') => {
     const d = apt.date || todayStr;
-    if (dateScope === 'hoy') return d === todayStr;
-    if (dateScope === 'proximas') return d >= todayStr;
-    return true;
-  });
+    if (scope === 'hoy') return d === todayStr;
+    if (scope === 'proximas') return d > todayStr;
+    return d >= todayStr;
+  };
+
+  const countHoy = byDiscipline.filter((a) => matchesScope(a, 'hoy')).length;
+  const countProximas = byDiscipline.filter((a) => matchesScope(a, 'proximas')).length;
+  const countTodas = byDiscipline.filter((a) => matchesScope(a, 'todas')).length;
+
+  const byDateScope = byDiscipline
+    .filter((apt) => matchesScope(apt, dateScope))
+    .sort((a, b) => {
+      const ka = `${a.date || todayStr} ${a.time || ''}`;
+      const kb = `${b.date || todayStr} ${b.time || ''}`;
+      return ka.localeCompare(kb);
+    });
 
   const activeAppointments = byDateScope.filter(
     (apt) => apt.status !== 'completado' && apt.status !== 'cancelado'
@@ -400,8 +410,8 @@ export default function DashboardPage() {
             {dateScope === 'hoy'
               ? 'Mostrando citas de hoy'
               : dateScope === 'proximas'
-              ? 'Citas de hoy en adelante'
-              : 'Historial completo de citas'}
+              ? 'Citas de mañana en adelante'
+              : 'Citas de hoy y próximas'}
           </span>
         </div>
 
