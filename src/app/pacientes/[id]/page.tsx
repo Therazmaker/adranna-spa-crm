@@ -6,11 +6,10 @@ import { useParams } from 'next/navigation';
 import { dbService } from '@/lib/dbService';
 import { Appointment, Client } from '@/types/database';
 import { formatTime12 } from '@/lib/timeUtils';
+import { getLocalDateStr, addDaysLocal } from '@/lib/dateUtils';
 
 function addDaysToToday(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return addDaysLocal(days);
 }
 
 function formatReadableDate(dateStr?: string): string {
@@ -48,7 +47,7 @@ export default function PacienteGeneralPage() {
 
   // Agregar registro directo a la tabla clínica (ej. transcribir ficha física)
   const [showAddManualRow, setShowAddManualRow] = useState(false);
-  const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manualDate, setManualDate] = useState(() => getLocalDateStr());
   const [manualObs, setManualObs] = useState('');
   const [manualProc, setManualProc] = useState('');
   const [isSavingManualRow, setIsSavingManualRow] = useState(false);

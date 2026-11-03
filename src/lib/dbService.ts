@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from './supabase';
+import { getLocalDateStr } from './dateUtils';
 import {
   INITIAL_CLIENTS,
   INITIAL_APPOINTMENTS,
@@ -1233,7 +1234,7 @@ export const dbService = {
       aromatherapy_oil: record.aromatherapyOil,
       session_notes: record.sessionNotes,
       duration_minutes: record.durationMinutes,
-      last_session_date: record.lastSessionDate || new Date().toISOString().slice(0, 10),
+      last_session_date: record.lastSessionDate || getLocalDateStr(),
       updated_at: new Date().toISOString(),
     };
 

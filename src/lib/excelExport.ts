@@ -1,4 +1,5 @@
 import { Appointment, Expense, PaymentMethod } from '@/types/database';
+import { getLocalDateStr } from './dateUtils';
 
 export interface CashReconciliationReportInput {
   periodLabel: string;
@@ -656,7 +657,7 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
   });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const safeDate = new Date().toISOString().slice(0, 10);
+  const safeDate = getLocalDateStr();
   const safePeriod = periodLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_');
   a.href = url;
   a.download = `Cuadre_Caja_Adranna_${safePeriod}_${safeDate}.xls`;

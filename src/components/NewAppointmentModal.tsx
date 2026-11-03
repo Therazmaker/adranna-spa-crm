@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Appointment, Client, Professional, ServicePackage } from '@/types/database';
 import { dbService } from '@/lib/dbService';
 import { formatTime12, getTimeOptions12 } from '@/lib/timeUtils';
+import { getLocalDateStr } from '@/lib/dateUtils';
 
 export const BLOCK_COLOR_PALETTE = [
   { id: '#7A4F3A', label: 'Terracota Spa' },
@@ -28,7 +29,7 @@ interface NewAppointmentModalProps {
   defaultTime?: string;
 }
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => getLocalDateStr();
 
 export default function NewAppointmentModal({
   isOpen,

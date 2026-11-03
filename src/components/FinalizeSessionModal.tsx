@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Appointment, InventoryProduct, PaymentMethod, SoldProductItem } from '@/types/database';
 import { dbService } from '@/lib/dbService';
+import { getLocalDateStr } from '@/lib/dateUtils';
 
 const PAYMENT_OPTIONS: { label: string; value: PaymentMethod; icon: string }[] = [
   { label: 'Efectivo', value: 'efectivo', icon: 'payments' },
@@ -149,7 +150,7 @@ export default function FinalizeSessionModal({
             a.status === 'completado'
         ).length;
         await dbService.updateClient(client.id, {
-          lastVisit: appointment.date || new Date().toISOString().slice(0, 10),
+          lastVisit: appointment.date || getLocalDateStr(),
           totalVisits: Math.max(client.totalVisits || 1, completedCount),
         });
       }

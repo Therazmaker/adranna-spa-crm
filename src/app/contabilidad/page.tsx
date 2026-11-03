@@ -6,6 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import { dbService } from '@/lib/dbService';
 import { Appointment, Expense, PaymentMethod } from '@/types/database';
 import { exportCashReconciliationExcel } from '@/lib/excelExport';
+import { getLocalDateStr, getStartOfWeekLocal, getStartOfMonthLocal } from '@/lib/dateUtils';
+import { formatTime12 } from '@/lib/timeUtils';
 
 const EXPENSE_CATEGORIES = [
   { label: 'Insumos Clínicos & Descartables', value: 'insumos' },
@@ -52,7 +54,7 @@ export default function ContabilidadPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [period, setPeriod] = useState<'today' | 'custom_date' | 'week' | 'month' | 'all'>('today');
-  const [customDate, setCustomDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [customDate, setCustomDate] = useState(() => getLocalDateStr());
 
   // Estado del Cuadre / Arqueo de Caja
   const [openingCash, setOpeningCash] = useState<number>(100);
@@ -68,11 +70,11 @@ export default function ContabilidadPage() {
   const [expAmount, setExpAmount] = useState<number>(0);
   const [expCategory, setExpCategory] = useState<Expense['category']>('insumos');
   const [expPaymentMethod, setExpPaymentMethod] = useState<Expense['paymentMethod']>('efectivo');
-  const [expDate, setExpDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [expDate, setExpDate] = useState(() => getLocalDateStr());
   const [expNotes, setExpNotes] = useState('');
   const [isSavingExpense, setIsSavingExpense] = useState(false);
 
-  const activeBoxKey = period === 'custom_date' ? customDate : new Date().toISOString().slice(0, 10);
+  const activeBoxKey = period === 'custom_date' ? customDate : getLocalDateStr();
 
   useEffect(() => {
     loadData();
@@ -161,17 +163,17 @@ export default function ContabilidadPage() {
     );
   }
 
-  // Filtrado por período
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const now = new Date();
-  const startOfWeek = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1)
-  )
-    .toISOString()
-    .slice(0, 10);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  // Helper para disciplina precisa (respeta tratamientos de masaje aunque estuvieran asignados como podología)
+  const getDiscipline = (apt: Appointment): 'podologia' | 'masaje' => {
+    if (apt.discipline === 'masaje') return 'masaje';
+    if (/masaj|corporal|relaj|descontract|piedras|reduct/i.test(apt.serviceName || '')) return 'masaje';
+    return 'podologia';
+  };
+
+  // Filtrado por período usando fecha local (sin desfase UTC al anochecer)
+  const todayStr = getLocalDateStr();
+  const startOfWeek = getStartOfWeekLocal();
+  const startOfMonth = getStartOfMonthLocal();
 
   const filterByDate = (dateStr?: string) => {
     if (!dateStr) return period === 'all';
@@ -199,10 +201,10 @@ export default function ContabilidadPage() {
     0
   );
   const podoIncome = filteredApts
-    .filter((a) => a.discipline === 'podologia')
+    .filter((a) => getDiscipline(a) === 'podologia')
     .reduce((s, a) => s + (Number(a.price) || 0), 0);
   const spaIncome = filteredApts
-    .filter((a) => a.discipline === 'masaje')
+    .filter((a) => getDiscipline(a) === 'masaje')
     .reduce((s, a) => s + (Number(a.price) || 0), 0);
 
   // Desglose por método de pago (para el Cuadre de Caja)
@@ -797,6 +799,15 @@ export default function ContabilidadPage() {
                     <span className="font-bold text-sm text-on-surface">
                       {apt.clientName}
                     </span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        apt.status === 'completado'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {apt.status === 'completado' ? 'Cobrada' : 'Por cobrar'}
+                    </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-container/15 text-primary">
                       {apt.serviceName}
                     </span>
@@ -807,7 +818,7 @@ export default function ContabilidadPage() {
                     )}
                   </div>
                   <p className="text-[11px] text-outline mt-0.5">
-                    {apt.date} · {apt.time} • {apt.professionalName} ({apt.cabinName})
+                    {apt.date} · {formatTime12(apt.time)} • {apt.professionalName} ({apt.cabinName})
                   </p>
                 </div>
 
