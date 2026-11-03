@@ -78,6 +78,27 @@ function getBlockColor(apt: Appointment): string {
   return apt.discipline === 'podologia' ? '#7A4F3A' : '#B87B31';
 }
 
+const APPOINTMENT_TAG_PRESETS = [
+  { label: 'Pendiente de reprogramar', color: '#D97706', icon: 'schedule' },
+  { label: 'Confirmado por WhatsApp', color: '#059669', icon: 'chat' },
+  { label: 'Por confirmar', color: '#EA580C', icon: 'hourglass_top' },
+  { label: 'VIP / Prioritario', color: '#7C3AED', icon: 'star' },
+  { label: 'Llegará tarde', color: '#DC2626', icon: 'warning' },
+  { label: 'A domicilio', color: '#0284C7', icon: 'home' },
+  { label: 'Esperando respuesta', color: '#4F46E5', icon: 'mark_chat_unread' },
+];
+
+const TAG_COLORS = [
+  { id: '#D97706', label: 'Ámbar' },
+  { id: '#059669', label: 'Verde' },
+  { id: '#EA580C', label: 'Naranja' },
+  { id: '#0284C7', label: 'Azul' },
+  { id: '#7C3AED', label: 'Morado' },
+  { id: '#DC2626', label: 'Rojo' },
+  { id: '#DB2777', label: 'Rosa' },
+  { id: '#4B5563', label: 'Gris' },
+];
+
 export default function AgendaPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -86,6 +107,11 @@ export default function AgendaPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [finalizingAppointment, setFinalizingAppointment] = useState<Appointment | null>(null);
+
+  // Quick Tag Popover State
+  const [taggingAppointment, setTaggingAppointment] = useState<Appointment | null>(null);
+  const [tagInputText, setTagInputText] = useState('');
+  const [tagInputColor, setTagInputColor] = useState('#D97706');
 
   const [filterProfessional, setFilterProfessional] = useState<string>('all');
   const [statusTab, setStatusTab] = useState<'activas' | 'finalizadas' | 'todas'>('activas');
@@ -211,6 +237,23 @@ export default function AgendaPage() {
     if (selectedAppointment?.id === updatedApt.id) {
       setSelectedAppointment(updatedApt);
     }
+  };
+
+  const handleSaveCustomTag = async (apt: Appointment, tagText: string, color: string) => {
+    const cleanTag = tagText.trim();
+    const updates: Partial<Appointment> = {
+      customTag: cleanTag || undefined,
+      tagColor: cleanTag ? color : undefined,
+    };
+
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === apt.id ? { ...a, ...updates } : a))
+    );
+    if (selectedAppointment?.id === apt.id) {
+      setSelectedAppointment((prev) => (prev ? { ...prev, ...updates } : null));
+    }
+    await dbService.updateAppointment(apt.id, updates);
+    setTaggingAppointment(null);
   };
 
   const handleColorChange = async (apt: Appointment, color: string) => {
@@ -503,6 +546,21 @@ export default function AgendaPage() {
 
           {/* Acciones Rápidas flotantes en hover */}
           <div className="opacity-0 group-hover/card:opacity-100 flex items-center gap-0.5 flex-shrink-0 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setTaggingAppointment(apt);
+                setTagInputText(apt.customTag || '');
+                setTagInputColor(apt.tagColor || '#D97706');
+              }}
+              title={apt.customTag ? `Etiqueta: "${apt.customTag}" (clic para cambiarla)` : 'Agregar etiqueta a esta cita'}
+              className={`w-4 h-4 rounded text-white flex items-center justify-center transition-colors shadow-2xs ${
+                apt.customTag ? 'bg-amber-600/90 hover:bg-amber-600' : 'bg-black/30 hover:bg-black/50'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[11px]">label</span>
+            </button>
             {!isDone && (
               <button
                 type="button"
@@ -539,6 +597,41 @@ export default function AgendaPage() {
             {apt.discipline === 'masaje' ? '💆‍♀️ ' : '🦶 '}
             {apt.serviceName}
           </p>
+
+          {/* Etiqueta visible en el calendario (ej. "Pendiente de reprogramar") */}
+          {apt.customTag ? (
+            <div className="mt-1">
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTaggingAppointment(apt);
+                  setTagInputText(apt.customTag || '');
+                  setTagInputColor(apt.tagColor || '#D97706');
+                }}
+                style={{ backgroundColor: apt.tagColor || '#D97706' }}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-extrabold text-white shadow-2xs max-w-full truncate hover:brightness-110 cursor-pointer transition-all"
+                title={`Etiqueta: "${apt.customTag}" (clic para cambiarla)`}
+              >
+                <span className="material-symbols-outlined text-[10px]">label</span>
+                <span className="truncate">{apt.customTag}</span>
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setTaggingAppointment(apt);
+                setTagInputText('');
+                setTagInputColor('#D97706');
+              }}
+              className="opacity-0 group-hover/card:opacity-90 mt-1 text-[8px] font-bold text-white/90 hover:text-white flex items-center gap-0.5 bg-black/25 px-1 py-0.2 rounded w-fit transition-opacity"
+              title="Agregar etiqueta"
+            >
+              <span className="material-symbols-outlined text-[9px]">add</span>
+              <span>Etiqueta</span>
+            </button>
+          )}
         </div>
 
         {/* Pie de la tarjeta: Profesional y Precio */}
@@ -1269,6 +1362,15 @@ export default function AgendaPage() {
                                   </span>
                                   <span className="font-bold">{formatTime12(apt.time)}</span>
                                   <span className="truncate">{apt.clientName}</span>
+                                  {apt.customTag && (
+                                    <span
+                                      style={{ backgroundColor: apt.tagColor || '#D97706' }}
+                                      className="text-[8px] font-extrabold px-1 rounded text-white truncate max-w-[65px]"
+                                      title={apt.customTag}
+                                    >
+                                      {apt.customTag}
+                                    </span>
+                                  )}
                                 </span>
                                 <span className="text-[9px] opacity-90 font-bold flex-shrink-0">
                                   S/{apt.price}
@@ -1357,6 +1459,15 @@ export default function AgendaPage() {
                             {apt.serviceName}
                           </span>
                           <span className="text-xs text-outline">{apt.durationMinutes} min</span>
+                          {apt.customTag && (
+                            <span
+                              style={{ backgroundColor: apt.tagColor || '#D97706' }}
+                              className="px-2 py-0.5 rounded-md text-[10px] font-extrabold text-white shadow-2xs flex items-center gap-1"
+                            >
+                              <span className="material-symbols-outlined text-[11px]">label</span>
+                              <span>{apt.customTag}</span>
+                            </span>
+                          )}
                           {apt.soldProducts && apt.soldProducts.length > 0 && (
                             <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
                               +{apt.soldProducts.length} prod.
@@ -1511,6 +1622,162 @@ export default function AgendaPage() {
         defaultDate={slotDefaultDate}
         defaultTime={slotDefaultTime}
       />
+
+      {/* ── MODAL FLOTANTE DE ETIQUETA RÁPIDA ── */}
+      {taggingAppointment && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest rounded-3xl w-full max-w-md p-5 shadow-2xl border border-surface-container-high space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-surface-container-high">
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[18px]">label</span>
+                </span>
+                <div>
+                  <h3 className="font-serif text-base font-bold text-primary">
+                    Etiqueta de la Cita
+                  </h3>
+                  <p className="text-[11px] text-on-surface-variant">
+                    {taggingAppointment.clientName} · {formatTime12(taggingAppointment.time)}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTaggingAppointment(null)}
+                className="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-primary"
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+
+            {/* Presets rápidos en 1 clic */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-on-surface-variant block">
+                Etiquetas sugeridas (1 clic):
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {APPOINTMENT_TAG_PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => {
+                      setTagInputText(p.label);
+                      setTagInputColor(p.color);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all border ${
+                      tagInputText === p.label
+                        ? 'ring-2 ring-primary text-white shadow-xs'
+                        : 'bg-surface-container-low text-on-surface hover:border-primary/40'
+                    }`}
+                    style={tagInputText === p.label ? { backgroundColor: p.color, borderColor: p.color } : undefined}
+                  >
+                    <span className="material-symbols-outlined text-[13px]">{p.icon}</span>
+                    <span>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Escribir etiqueta personalizada */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-on-surface-variant block">
+                O escribe cualquier texto personalizado:
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 material-symbols-outlined text-[16px] text-outline">
+                  edit_note
+                </span>
+                <input
+                  type="text"
+                  placeholder="Ej. Pendiente de reprogramar, Por confirmar..."
+                  value={tagInputText}
+                  onChange={(e) => setTagInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveCustomTag(taggingAppointment, tagInputText, tagInputColor);
+                    }
+                  }}
+                  className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-container-low border border-surface-container-high text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+            </div>
+
+            {/* Selector de color de la etiqueta */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-on-surface-variant block">
+                Color de la etiqueta:
+              </label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {TAG_COLORS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setTagInputColor(c.id)}
+                    style={{ backgroundColor: c.id }}
+                    title={c.label}
+                    className={`w-6 h-6 rounded-lg transition-transform flex items-center justify-center text-white ${
+                      tagInputColor === c.id ? 'ring-2 ring-offset-2 ring-primary scale-110' : 'opacity-80 hover:opacity-100'
+                    }`}
+                  >
+                    {tagInputColor === c.id && (
+                      <span className="material-symbols-outlined text-[14px]">check</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Vista previa */}
+            {tagInputText.trim() && (
+              <div className="p-2.5 rounded-xl bg-surface-container-low flex items-center justify-between text-xs">
+                <span className="text-[11px] text-outline font-medium">Vista previa en calendario:</span>
+                <span
+                  style={{ backgroundColor: tagInputColor }}
+                  className="px-2 py-0.5 rounded text-[10px] font-extrabold text-white shadow-2xs flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[11px]">label</span>
+                  <span>{tagInputText.trim()}</span>
+                </span>
+              </div>
+            )}
+
+            {/* Botones de acción */}
+            <div className="flex items-center justify-between pt-2 border-t border-surface-container-high gap-2">
+              {taggingAppointment.customTag ? (
+                <button
+                  type="button"
+                  onClick={() => handleSaveCustomTag(taggingAppointment, '', tagInputColor)}
+                  className="px-3 py-2 rounded-xl bg-error-container/30 text-error hover:bg-error-container/60 text-xs font-bold transition-colors flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[15px]">label_off</span>
+                  <span>Quitar etiqueta</span>
+                </button>
+              ) : (
+                <div />
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTaggingAppointment(null)}
+                  className="px-3 py-2 rounded-xl bg-surface-container-high text-on-surface-variant text-xs font-bold hover:bg-surface-container"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveCustomTag(taggingAppointment, tagInputText, tagInputColor)}
+                  className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-sm hover:bg-primary-container flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[16px]">check</span>
+                  <span>Guardar Etiqueta</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast flotante interactivo de confirmación de reprogramación */}
       {repositionToast && repositionToast.visible && (

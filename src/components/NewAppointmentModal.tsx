@@ -60,6 +60,8 @@ export default function NewAppointmentModal({
   const [duration, setDuration] = useState<string>('45');
   const [notes, setNotes] = useState('');
   const [blockColor, setBlockColor] = useState(BLOCK_COLOR_PALETTE[0].id);
+  const [customTag, setCustomTag] = useState('');
+  const [tagColor, setTagColor] = useState('#D97706');
   const [isSaving, setIsSaving] = useState(false);
 
   // Prellenar únicamente al abrir el modal o cambiar la cita que se edita
@@ -81,6 +83,8 @@ export default function NewAppointmentModal({
       setDuration(String(editingAppointment.durationMinutes || 45));
       setNotes(editingAppointment.notes || '');
       setBlockColor(editingAppointment.blockColor || BLOCK_COLOR_PALETTE[0].id);
+      setCustomTag(editingAppointment.customTag || '');
+      setTagColor(editingAppointment.tagColor || '#D97706');
     } else {
       setSelectedClientId((prev) => prev || clients[0]?.id || '');
       setDiscipline('podologia');
@@ -89,6 +93,8 @@ export default function NewAppointmentModal({
       setCabin('Cabina 1');
       setNotes('');
       setBlockColor(BLOCK_COLOR_PALETTE[0].id);
+      setCustomTag('');
+      setTagColor('#D97706');
       setServiceName('');
       setPrice('');
       setDuration('45');
@@ -203,6 +209,8 @@ export default function NewAppointmentModal({
       soldProducts: editingAppointment?.soldProducts,
       productsTotal: editingAppointment?.productsTotal,
       blockColor,
+      customTag: customTag.trim() || undefined,
+      tagColor: customTag.trim() ? tagColor : undefined,
       status: (editingAppointment?.status || 'confirmado') as Appointment['status'],
       date,
       time,
@@ -566,6 +574,86 @@ export default function NewAppointmentModal({
                   className="opacity-0 absolute inset-0 cursor-pointer"
                 />
               </label>
+            </div>
+          </div>
+
+          {/* 7. Etiqueta Visual de la Cita (ej. Pendiente de reprogramar) */}
+          <div className="space-y-1.5 p-3 rounded-2xl bg-surface-container-low border border-surface-container-high/70">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[16px] text-amber-600">label</span>
+                <span>Etiqueta Visual de la Cita (opcional)</span>
+              </label>
+              {customTag.trim() && (
+                <span
+                  style={{ backgroundColor: tagColor }}
+                  className="px-2 py-0.5 rounded text-[10px] font-extrabold text-white shadow-2xs flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[10px]">label</span>
+                  <span>{customTag.trim()}</span>
+                </span>
+              )}
+            </div>
+
+            {/* Chips rápidos */}
+            <div className="flex flex-wrap gap-1">
+              {[
+                { label: 'Pendiente de reprogramar', color: '#D97706' },
+                { label: 'Confirmado por WhatsApp', color: '#059669' },
+                { label: 'Por confirmar', color: '#EA580C' },
+                { label: 'VIP / Prioritario', color: '#7C3AED' },
+                { label: 'Llegará tarde', color: '#DC2626' },
+              ].map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => {
+                    setCustomTag(chip.label);
+                    setTagColor(chip.color);
+                  }}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-all ${
+                    customTag === chip.label
+                      ? 'text-white shadow-xs'
+                      : 'bg-surface-container-lowest text-on-surface-variant hover:border-primary/40'
+                  }`}
+                  style={customTag === chip.label ? { backgroundColor: chip.color, borderColor: chip.color } : undefined}
+                >
+                  + {chip.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="text"
+                placeholder="Escribe una etiqueta (ej. Pendiente de reprogramar)..."
+                value={customTag}
+                onChange={(e) => setCustomTag(e.target.value)}
+                className="flex-1 bg-surface-container-lowest border border-surface-container-high rounded-xl px-3 py-2 text-xs font-semibold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <div className="flex items-center gap-1">
+                {['#D97706', '#059669', '#EA580C', '#0284C7', '#7C3AED', '#DC2626'].map((col) => (
+                  <button
+                    key={col}
+                    type="button"
+                    onClick={() => setTagColor(col)}
+                    style={{ backgroundColor: col }}
+                    className={`w-6 h-6 rounded-lg transition-transform ${
+                      tagColor === col && customTag.trim() ? 'ring-2 ring-offset-1 ring-primary scale-110' : 'opacity-70 hover:opacity-100'
+                    }`}
+                  />
+                ))}
+              </div>
+              {customTag && (
+                <button
+                  type="button"
+                  onClick={() => setCustomTag('')}
+                  title="Quitar etiqueta"
+                  className="w-7 h-7 rounded-lg bg-surface-container-high text-on-surface-variant hover:text-error flex items-center justify-center text-xs"
+                >
+                  ✕
+                </button>
+              )}
             </div>
           </div>
 

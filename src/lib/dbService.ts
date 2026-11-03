@@ -683,7 +683,9 @@ export const dbService = {
       updates.servicePrice !== undefined ||
       updates.paymentMethod !== undefined ||
       updates.payments !== undefined ||
-      updates.blockColor !== undefined
+      updates.blockColor !== undefined ||
+      updates.customTag !== undefined ||
+      updates.tagColor !== undefined
     ) {
       const target = updatedLocal || (updates as Appointment);
       payload.notes = encodeAptNotes(target);
@@ -1480,6 +1482,8 @@ function encodeAptNotes(a: Partial<Appointment>): string | null {
   if (a.paymentMethod) meta.paymentMethod = a.paymentMethod;
   if (a.payments && a.payments.length > 0) meta.payments = a.payments;
   if (a.blockColor) meta.blockColor = a.blockColor;
+  if (a.customTag !== undefined) meta.customTag = a.customTag;
+  if (a.tagColor !== undefined) meta.tagColor = a.tagColor;
   const hasMeta = Object.keys(meta).length > 0;
   if (!cleanNotes && !hasMeta) return null;
   return `${cleanNotes || ''}${hasMeta ? `${META_MARKER}${JSON.stringify(meta)}${META_END}` : ''}`;
@@ -1522,6 +1526,8 @@ function mapAppointment(a: any): Appointment {
     paymentMethod?: Appointment['paymentMethod'];
     payments?: Appointment['payments'];
     blockColor?: string;
+    customTag?: string;
+    tagColor?: string;
   }>(a.notes);
 
   const rawDiscipline = a.discipline;
@@ -1547,6 +1553,8 @@ function mapAppointment(a: any): Appointment {
     paymentMethod: meta.paymentMethod || 'efectivo',
     payments: Array.isArray(meta.payments) && meta.payments.length > 0 ? meta.payments : undefined,
     blockColor: meta.blockColor,
+    customTag: meta.customTag,
+    tagColor: meta.tagColor,
     status: a.status, date: a.appointment_date,
     time: a.appointment_time?.slice(0, 5) || '10:00',
     hasMedicalAlert: a.has_medical_alert, medicalAlertText: a.medical_alert_text,

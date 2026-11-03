@@ -558,6 +558,17 @@ export default function DashboardPage() {
                               Alerta Médica
                             </span>
                           )}
+
+                          {apt.customTag && (
+                            <span
+                              style={{ backgroundColor: apt.tagColor || '#D97706' }}
+                              className="px-2 py-0.5 rounded-full text-white text-[10px] font-extrabold flex items-center gap-1 shadow-2xs"
+                              title={`Etiqueta: ${apt.customTag}`}
+                            >
+                              <span className="material-symbols-outlined text-[11px]">label</span>
+                              <span>{apt.customTag}</span>
+                            </span>
+                          )}
                         </div>
 
                         <h3 className="font-serif text-base text-on-surface font-bold mt-1 truncate">

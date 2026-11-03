@@ -78,6 +78,8 @@ export interface Appointment {
   paymentMethod?: PaymentMethod; // Medio de pago para el cuadre de caja
   payments?: PaymentSplit[]; // Desglose de pago mixto (ej. parte efectivo + parte Yape)
   blockColor?: string; // Color personalizado en vista calendario
+  customTag?: string; // Etiqueta visible en el calendario (ej. "Pendiente de reprogramar", "Confirmado")
+  tagColor?: string; // Color de fondo de la etiqueta
   status: 'confirmado' | 'en_curso' | 'completado' | 'cancelado';
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
