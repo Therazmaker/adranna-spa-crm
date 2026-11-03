@@ -154,6 +154,10 @@ export default function AgendaPage() {
     return statusTab === 'activas' ? activeAppointments : completedAppointments;
   }, [statusTab, byProfessional, activeAppointments, completedAppointments]);
 
+  // El calendario funciona como historial visual: SIEMPRE muestra todas las citas
+  // (pasadas, finalizadas, pendientes y canceladas), sin depender de las pestañas de estado.
+  const calendarAppointments = byProfessional;
+
   const handleAddAppointment = (newApt: Appointment) => {
     setAppointments((prev) => [newApt, ...prev]);
   };
@@ -426,6 +430,7 @@ export default function AgendaPage() {
   const renderAppointmentCard = (apt: Appointment, totalInSlot: number) => {
     const bgColor = getBlockColor(apt);
     const isDone = apt.status === 'completado';
+    const isCancelled = apt.status === 'cancelado';
     const isBeingDragged = draggedAppointment?.id === apt.id;
     const isSideBySide = totalInSlot > 1;
 
@@ -452,8 +457,14 @@ export default function AgendaPage() {
           isBeingDragged
             ? 'opacity-30 scale-95 ring-2 ring-white border-dashed'
             : 'hover:-translate-y-0.5 hover:brightness-105'
-        } ${isDone ? 'opacity-85' : ''}`}
-        title={`Arrastra para reprogramar • ${apt.clientName} - ${apt.serviceName} (${formatTime12(apt.time)})`}
+        } ${
+          isCancelled
+            ? 'opacity-40 grayscale hover:opacity-70 line-through decoration-white/70'
+            : isDone
+            ? 'opacity-50 saturate-50 hover:opacity-90 hover:saturate-100'
+            : ''
+        }`}
+        title={`${isDone ? '✓ Finalizada • ' : isCancelled ? '✕ Cancelada • ' : 'Arrastra para reprogramar • '}${apt.clientName} - ${apt.serviceName} (${formatTime12(apt.time)})`}
       >
         {/* Barra superior con hora, iconos y botones de acción rápida en hover */}
         <div className="flex items-center justify-between gap-1 min-w-0">
@@ -593,7 +604,27 @@ export default function AgendaPage() {
         </div>
       </div>
 
-      {/* Pestañas de Estado: Por Atender / Finalizadas / Todas */}
+      {/* En vista calendario: leyenda (el calendario siempre muestra todo como historial visual) */}
+      {viewMode === 'calendar' && (
+        <div className="flex items-center gap-3 flex-wrap bg-surface-container-low px-3 py-2 rounded-2xl border border-surface-container-high text-[11px] font-semibold text-on-surface-variant">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-[#7A4F3A]"></span>
+            Por atender ({activeAppointments.length})
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-[#7A4F3A] opacity-50 saturate-50"></span>
+            <span className="material-symbols-outlined text-[13px] text-emerald-700">task_alt</span>
+            Finalizada · color tenue ({completedAppointments.filter((a) => a.status === 'completado').length})
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded bg-[#7A4F3A] opacity-40 grayscale"></span>
+            <span className="line-through">Cancelada</span>
+          </span>
+        </div>
+      )}
+
+      {/* Pestañas de Estado: Por Atender / Finalizadas / Todas (solo en vista lista) */}
+      {viewMode === 'list' && (
       <div className="grid grid-cols-3 bg-surface-container p-1 rounded-2xl border border-surface-container-high text-xs font-bold">
         <button
           type="button"
@@ -655,6 +686,7 @@ export default function AgendaPage() {
           </span>
         </button>
       </div>
+      )}
 
       {/* Filtro Dinámico de Profesionales */}
       {professionals.length > 0 && (
@@ -797,7 +829,7 @@ export default function AgendaPage() {
                     {calendarDays.map((dStr) => {
                       const dObj = parseISODate(dStr);
                       const isToday = dStr === todayISO;
-                      const dayAptsCount = displayedAppointments.filter(
+                      const dayAptsCount = calendarAppointments.filter(
                         (a) => (a.date || todayISO) === dStr
                       ).length;
 
@@ -846,7 +878,7 @@ export default function AgendaPage() {
 
                       {/* Celdas por cada día */}
                       {calendarDays.map((dStr) => {
-                        const cellApts = displayedAppointments.filter(
+                        const cellApts = calendarAppointments.filter(
                           (a) =>
                             (a.date || todayISO) === dStr &&
                             getAppointmentHourKey(a.time) === hour
@@ -1041,7 +1073,7 @@ export default function AgendaPage() {
 
                 <div className="grid grid-cols-7 divide-x divide-y divide-surface-container-high">
                   {monthCells.map((cell) => {
-                    const dayApts = displayedAppointments
+                    const dayApts = calendarAppointments
                       .filter((a) => (a.date || todayISO) === cell.dateStr)
                       .sort((a, b) => a.time.localeCompare(b.time));
                     const isToday = cell.dateStr === todayISO;
@@ -1108,6 +1140,8 @@ export default function AgendaPage() {
                           {dayApts.map((apt) => {
                             const bgColor = getBlockColor(apt);
                             const isBeingDragged = draggedAppointment?.id === apt.id;
+                            const mDone = apt.status === 'completado';
+                            const mCancelled = apt.status === 'cancelado';
                             return (
                               <div
                                 key={apt.id}
@@ -1130,11 +1164,19 @@ export default function AgendaPage() {
                                   isBeingDragged
                                     ? 'opacity-30 scale-95 border border-dashed border-white'
                                     : ''
+                                } ${
+                                  mCancelled
+                                    ? 'opacity-40 grayscale line-through hover:opacity-70'
+                                    : mDone
+                                    ? 'opacity-50 saturate-50 hover:opacity-90 hover:saturate-100'
+                                    : ''
                                 }`}
-                                title={`Arrastra a otro día • ${formatTime12(apt.time)} - ${apt.clientName} (${apt.serviceName})`}
+                                title={`${mDone ? '✓ Finalizada • ' : mCancelled ? '✕ Cancelada • ' : 'Arrastra a otro día • '}${formatTime12(apt.time)} - ${apt.clientName} (${apt.serviceName})`}
                               >
                                 <span className="truncate flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-[10px] opacity-70">drag_indicator</span>
+                                  <span className="material-symbols-outlined text-[10px] opacity-70">
+                                    {mDone ? 'task_alt' : 'drag_indicator'}
+                                  </span>
                                   <span className="font-bold">{formatTime12(apt.time)}</span>
                                   <span className="truncate">{apt.clientName}</span>
                                 </span>
