@@ -137,6 +137,8 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
       name: string;
       role: string;
       sessions: number;
+      uniqueClients: number;
+      clientNames: string[];
       serviceIncome: number;
       productsIncome: number;
       total: number;
@@ -149,6 +151,8 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
       name: key,
       role: a.professionalRole || (a.discipline === 'podologia' ? 'Podología' : 'Masoterapia'),
       sessions: 0,
+      uniqueClients: 0,
+      clientNames: [],
       serviceIncome: 0,
       productsIncome: 0,
       total: 0,
@@ -158,6 +162,10 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     const srvAmt = a.servicePrice !== undefined ? Number(a.servicePrice) : totalAmt - prodAmt;
 
     curr.sessions += 1;
+    if (a.clientName && !curr.clientNames.includes(a.clientName)) {
+      curr.clientNames.push(a.clientName);
+    }
+    curr.uniqueClients = curr.clientNames.length;
     curr.serviceIncome += srvAmt;
     curr.productsIncome += prodAmt;
     curr.total += totalAmt;
@@ -617,34 +625,40 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
   <Table>
    <Column ss:Width="180"/>
    <Column ss:Width="140"/>
+   <Column ss:Width="90"/>
    <Column ss:Width="110"/>
-   <Column ss:Width="130"/>
-   <Column ss:Width="130"/>
-   <Column ss:Width="135"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="110"/>
+   <Column ss:Width="120"/>
+   <Column ss:Width="260"/>
 
    <Row ss:Height="26">
-    ${cellString('PRODUCCIÓN Y RECAUDACIÓN POR ESPECIALISTA', 'sTitle', 5)}
+    ${cellString('PRODUCCIÓN, CLIENTES Y RECAUDACIÓN POR ESPECIALISTA', 'sTitle', 7)}
    </Row>
    <Row ss:Height="22">
     ${cellString('Especialista / Profesional', 'sTableHeader')}
     ${cellString('Rol / Especialidad', 'sTableHeader')}
-    ${cellString('Sesiones Atendidas', 'sTableHeader')}
+    ${cellString('Sesiones', 'sTableHeader')}
+    ${cellString('Clientes Únicos', 'sTableHeader')}
     ${cellString('Servicios (S/)', 'sTableHeader')}
     ${cellString('Productos (S/)', 'sTableHeader')}
     ${cellString('Total Generado (S/)', 'sTableHeader')}
+    ${cellString('Clientes Atendidos', 'sTableHeader')}
    </Row>
    ${
      profRows.length === 0
-       ? `<Row ss:Height="20">${cellString('Sin sesiones registradas en este período.', 'sCell', 5)}</Row>`
+       ? `<Row ss:Height="20">${cellString('Sin sesiones registradas en este período.', 'sCell', 7)}</Row>`
        : profRows
            .map(
              (p) => `<Row ss:Height="20">
     ${cellString(p.name, 'sCellBold')}
     ${cellString(p.role, 'sCell')}
     ${cellNumber(p.sessions, 'sInt')}
+    ${cellNumber(p.uniqueClients, 'sInt')}
     ${cellNumber(p.serviceIncome, 'sCurrency')}
     ${cellNumber(p.productsIncome, 'sCurrency')}
     ${cellNumber(p.total, 'sCurrency')}
+    ${cellString(p.clientNames.join(', '), 'sCell')}
    </Row>`
            )
            .join('\n   ')
@@ -652,9 +666,11 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
    <Row ss:Height="23">
     ${cellString('TOTAL EQUIPO ADRANNA', 'sTotalLabel', 1)}
     ${cellNumber(sortedApts.length, 'sTotalInt')}
+    ${cellNumber(new Set(sortedApts.map((a) => a.clientName.trim().toLowerCase())).size, 'sTotalInt')}
     ${cellNumber(podoServiceIncome + spaServiceIncome, 'sTotalCurrency')}
     ${cellNumber(totalProductsSold, 'sTotalCurrency')}
     ${cellNumber(totalIncome, 'sTotalCurrency')}
+    ${cellString('-', 'sCell')}
    </Row>
   </Table>
  </Worksheet>

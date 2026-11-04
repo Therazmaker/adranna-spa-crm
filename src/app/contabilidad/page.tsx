@@ -57,6 +57,12 @@ export default function ContabilidadPage() {
   const [period, setPeriod] = useState<'today' | 'custom_date' | 'week' | 'month' | 'all'>('today');
   const [customDate, setCustomDate] = useState(() => getLocalDateStr());
 
+  // Filtros interactivos por Especialidad, Especialista y Buscador de Cliente
+  const [selectedDiscipline, setSelectedDiscipline] = useState<'todas' | 'podologia' | 'masaje'>('todas');
+  const [selectedSpecialist, setSelectedSpecialist] = useState<string>('todos');
+  const [clientSearchFilter, setClientSearchFilter] = useState<string>('');
+  const [expandedSpecialist, setExpandedSpecialist] = useState<string | null>(null);
+
   // Estado del Cuadre / Arqueo de Caja
   const [openingCash, setOpeningCash] = useState<number>(100);
   const [countedCashInput, setCountedCashInput] = useState<string>('');
@@ -196,17 +202,134 @@ export default function ContabilidadPage() {
   const netProfit = totalIncome - totalExpenses;
   const avgTicket = filteredApts.length > 0 ? Math.round(totalIncome / filteredApts.length) : 0;
 
-  // Ingresos por disciplina y venta de productos
+  // 1. Ingresos y clientes por disciplina (Podología vs Masajes)
+  const podoApts = filteredApts.filter((a) => getDiscipline(a) === 'podologia');
+  const spaApts = filteredApts.filter((a) => getDiscipline(a) === 'masaje');
+
+  // Clientes únicos atendidos en el período por disciplina
+  const podoUniqueClients = new Set(podoApts.map((a) => a.clientName.trim().toLowerCase())).size;
+  const spaUniqueClients = new Set(spaApts.map((a) => a.clientName.trim().toLowerCase())).size;
+
   const totalProductsIncome = filteredApts.reduce(
     (sum, a) => sum + (Number(a.productsTotal) || 0),
     0
   );
-  const podoIncome = filteredApts
-    .filter((a) => getDiscipline(a) === 'podologia')
-    .reduce((s, a) => s + (Number(a.price) || 0), 0);
-  const spaIncome = filteredApts
-    .filter((a) => getDiscipline(a) === 'masaje')
-    .reduce((s, a) => s + (Number(a.price) || 0), 0);
+  const podoIncome = podoApts.reduce((s, a) => s + (Number(a.price) || 0), 0);
+  const spaIncome = spaApts.reduce((s, a) => s + (Number(a.price) || 0), 0);
+
+  // 2. Lista de especialistas para los filtros
+  const availableSpecialists = Array.from(
+    new Set(
+      filteredApts
+        .map((a) => a.professionalName?.trim())
+        .filter((name): name is string => Boolean(name))
+    )
+  ).sort();
+
+  // 3. Estructura de rendimiento por especialista
+  interface SpecialistClientSummary {
+    clientName: string;
+    clientId?: string;
+    sessionsCount: number;
+    services: string[];
+    dates: string[];
+    totalPaid: number;
+  }
+
+  interface SpecialistSummary {
+    name: string;
+    role: string;
+    discipline: 'podologia' | 'masaje';
+    sessionsCount: number;
+    uniqueClientsCount: number;
+    clients: SpecialistClientSummary[];
+    totalIncome: number;
+    serviceIncome: number;
+    productsIncome: number;
+  }
+
+  const specialistsMap = new Map<string, SpecialistSummary>();
+
+  for (const apt of filteredApts) {
+    const specName = apt.professionalName?.trim() || 'Sin asignar';
+    const disc = getDiscipline(apt);
+    const curr = specialistsMap.get(specName) || {
+      name: specName,
+      role: apt.professionalRole || (disc === 'podologia' ? 'Podología' : 'Masoterapia'),
+      discipline: disc,
+      sessionsCount: 0,
+      uniqueClientsCount: 0,
+      clients: [],
+      totalIncome: 0,
+      serviceIncome: 0,
+      productsIncome: 0,
+    };
+
+    curr.sessionsCount += 1;
+    const totalAmt = Number(apt.price) || 0;
+    const prodAmt = Number(apt.productsTotal) || 0;
+    const srvAmt = apt.servicePrice !== undefined ? Number(apt.servicePrice) : totalAmt - prodAmt;
+
+    curr.totalIncome += totalAmt;
+    curr.serviceIncome += srvAmt;
+    curr.productsIncome += prodAmt;
+
+    let clientEntry = curr.clients.find(
+      (c) => c.clientName.trim().toLowerCase() === apt.clientName.trim().toLowerCase()
+    );
+    if (!clientEntry) {
+      clientEntry = {
+        clientName: apt.clientName,
+        clientId: apt.clientId,
+        sessionsCount: 0,
+        services: [],
+        dates: [],
+        totalPaid: 0,
+      };
+      curr.clients.push(clientEntry);
+    }
+    clientEntry.sessionsCount += 1;
+    if (apt.serviceName && !clientEntry.services.includes(apt.serviceName)) {
+      clientEntry.services.push(apt.serviceName);
+    }
+    const dateLabel = apt.date ? `${apt.date.split('-').reverse().join('/')} (${formatTime12(apt.time)})` : apt.time;
+    if (!clientEntry.dates.includes(dateLabel)) {
+      clientEntry.dates.push(dateLabel);
+    }
+    clientEntry.totalPaid += totalAmt;
+
+    curr.uniqueClientsCount = curr.clients.length;
+    specialistsMap.set(specName, curr);
+  }
+
+  const specialistsList = Array.from(specialistsMap.values()).sort(
+    (a, b) => b.totalIncome - a.totalIncome
+  );
+
+  // 4. Filtrado de citas a mostrar en el detalle
+  const displayedApts = filteredApts.filter((a) => {
+    if (selectedDiscipline !== 'todas' && getDiscipline(a) !== selectedDiscipline) {
+      return false;
+    }
+    if (selectedSpecialist !== 'todos' && a.professionalName?.trim() !== selectedSpecialist) {
+      return false;
+    }
+    if (clientSearchFilter.trim()) {
+      const q = clientSearchFilter.toLowerCase().trim();
+      const matchClient = a.clientName.toLowerCase().includes(q);
+      const matchPhone = a.clientPhone && a.clientPhone.toLowerCase().includes(q);
+      const matchService = a.serviceName && a.serviceName.toLowerCase().includes(q);
+      if (!matchClient && !matchPhone && !matchService) return false;
+    }
+    return true;
+  });
+
+  const displayedIncome = displayedApts.reduce((s, a) => s + (Number(a.price) || 0), 0);
+  const displayedUniqueClients = new Set(displayedApts.map((a) => a.clientName.trim().toLowerCase())).size;
+  const isFilteringActive =
+    selectedDiscipline !== 'todas' ||
+    selectedSpecialist !== 'todos' ||
+    Boolean(clientSearchFilter.trim());
 
   // Desglose por método de pago (para el Cuadre de Caja)
   const paymentBreakdown = PAYMENT_METHODS.map((pm) => {
@@ -720,59 +843,361 @@ export default function ContabilidadPage() {
         </div>
       </section>
 
-      {/* Desglose por Servicio y Productos */}
-      <section className="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container-high/60 shadow-xs space-y-3">
-        <h3 className="font-serif text-lg font-bold text-primary">
-          Ingresos por Especialidad Clínica y Productos
-        </h3>
+      {/* ===================================================================== */}
+      {/* 1. COMPARATIVA CLÍNICA: PODOLOGÍA vs MASAJES (CLIENTES Y FACTURACIÓN) */}
+      {/* ===================================================================== */}
+      <section className="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container-high/60 shadow-xs space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-xl">balance</span>
+              <h3 className="font-serif text-lg font-bold text-primary">
+                Comparativa de Disciplinas: Podología vs Masajes
+              </h3>
+            </div>
+            <p className="text-xs text-on-surface-variant">
+              Claridad total de cuántos clientes únicos y cuántas sesiones atiende cada disciplina
+            </p>
+          </div>
+          {isFilteringActive && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedDiscipline('todas');
+                setSelectedSpecialist('todos');
+                setClientSearchFilter('');
+              }}
+              className="text-xs font-bold text-primary hover:underline flex items-center gap-1 self-start sm:self-auto"
+            >
+              <span className="material-symbols-outlined text-[15px]">filter_alt_off</span>
+              <span>Restablecer Filtros</span>
+            </button>
+          )}
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-          <div className="p-3.5 rounded-xl bg-surface-container-low border border-surface-container-high flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-primary"></span>
-              <div>
-                <span className="text-xs font-bold text-on-surface block">Podología Clínica</span>
-                <span className="text-[11px] text-outline font-medium">
-                  {filteredApts.filter((a) => a.discipline === 'podologia').length} sesiones
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
+          {/* Tarjeta Podología Clínica */}
+          <div
+            className={`p-4 rounded-2xl border-2 transition-all flex flex-col justify-between gap-3 ${
+              selectedDiscipline === 'podologia'
+                ? 'bg-primary/5 border-primary shadow-xs ring-2 ring-primary/20'
+                : 'bg-surface-container-low border-surface-container-high hover:border-primary/40'
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[18px]">footprint</span>
+                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-on-surface block">Podología Clínica</span>
+                    <span className="text-[10px] text-outline font-semibold uppercase tracking-wider">
+                      Especialidad de Pies
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                  {podoApts.length} sesiones
                 </span>
               </div>
+
+              <div className="mt-3.5 flex items-baseline justify-between border-t border-surface-container-high/80 pt-2.5">
+                <div>
+                  <span className="text-2xl sm:text-3xl font-serif font-extrabold text-primary block leading-none">
+                    {podoUniqueClients}
+                  </span>
+                  <span className="text-[11px] font-bold text-on-surface-variant">
+                    {podoUniqueClients === 1 ? 'Paciente atendido' : 'Pacientes atendidos'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="font-serif font-extrabold text-lg text-on-surface block leading-none">
+                    S/ {podoIncome.toFixed(2)}
+                  </span>
+                  <span className="text-[10px] text-outline font-medium">Facturado</span>
+                </div>
+              </div>
             </div>
-            <span className="font-serif font-bold text-lg text-primary">S/ {podoIncome}</span>
+
+            <button
+              type="button"
+              onClick={() => setSelectedDiscipline(selectedDiscipline === 'podologia' ? 'todas' : 'podologia')}
+              className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                selectedDiscipline === 'podologia'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'bg-surface-container-lowest text-primary hover:bg-primary/10 border border-primary/20'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">
+                {selectedDiscipline === 'podologia' ? 'check_circle' : 'filter_list'}
+              </span>
+              <span>{selectedDiscipline === 'podologia' ? 'Mostrando Podología' : 'Ver solo Podología'}</span>
+            </button>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-surface-container-low border border-surface-container-high flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-secondary"></span>
-              <div>
-                <span className="text-xs font-bold text-on-surface block">Masajes / Spa</span>
-                <span className="text-[11px] text-outline font-medium">
-                  {filteredApts.filter((a) => a.discipline === 'masaje').length} sesiones
+          {/* Tarjeta Masajes & Bienestar (Masajista) */}
+          <div
+            className={`p-4 rounded-2xl border-2 transition-all flex flex-col justify-between gap-3 ${
+              selectedDiscipline === 'masaje'
+                ? 'bg-secondary/10 border-secondary shadow-xs ring-2 ring-secondary/20'
+                : 'bg-surface-container-low border-surface-container-high hover:border-secondary/40'
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-secondary/20 text-secondary flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[18px]">spa</span>
+                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-on-surface block">Masajes & Bienestar</span>
+                    <span className="text-[10px] text-outline font-semibold uppercase tracking-wider">
+                      Área de Masajista
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-secondary/15 text-secondary">
+                  {spaApts.length} sesiones
                 </span>
               </div>
+
+              <div className="mt-3.5 flex items-baseline justify-between border-t border-surface-container-high/80 pt-2.5">
+                <div>
+                  <span className="text-2xl sm:text-3xl font-serif font-extrabold text-secondary block leading-none">
+                    {spaUniqueClients}
+                  </span>
+                  <span className="text-[11px] font-bold text-on-surface-variant">
+                    {spaUniqueClients === 1 ? 'Paciente atendido' : 'Pacientes atendidos'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="font-serif font-extrabold text-lg text-on-surface block leading-none">
+                    S/ {spaIncome.toFixed(2)}
+                  </span>
+                  <span className="text-[10px] text-outline font-medium">Facturado</span>
+                </div>
+              </div>
             </div>
-            <span className="font-serif font-bold text-lg text-secondary">S/ {spaIncome}</span>
+
+            <button
+              type="button"
+              onClick={() => setSelectedDiscipline(selectedDiscipline === 'masaje' ? 'todas' : 'masaje')}
+              className={`w-full py-1.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                selectedDiscipline === 'masaje'
+                  ? 'bg-secondary text-white shadow-xs'
+                  : 'bg-surface-container-lowest text-secondary hover:bg-secondary/10 border border-secondary/20'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">
+                {selectedDiscipline === 'masaje' ? 'check_circle' : 'filter_list'}
+              </span>
+              <span>{selectedDiscipline === 'masaje' ? 'Mostrando Masajes' : 'Ver solo Masajista'}</span>
+            </button>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-surface-container-low border border-surface-container-high flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="w-3 h-3 rounded-full bg-emerald-600"></span>
-              <div>
-                <span className="text-xs font-bold text-on-surface block">Productos Vendidos</span>
-                <span className="text-[11px] text-outline font-medium">
-                  Incluidos en sesiones
-                </span>
+          {/* Tarjeta Productos Vendidos */}
+          <div className="p-4 rounded-2xl bg-surface-container-low border border-surface-container-high flex flex-col justify-between gap-3">
+            <div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 h-8 rounded-xl bg-emerald-700/15 text-emerald-800 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[18px]">shopping_bag</span>
+                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-on-surface block">Venta de Productos</span>
+                    <span className="text-[10px] text-outline font-semibold uppercase tracking-wider">
+                      Cremas, órtesis y sprays
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3.5 flex items-baseline justify-between border-t border-surface-container-high/80 pt-2.5">
+                <div>
+                  <span className="text-2xl sm:text-3xl font-serif font-extrabold text-emerald-800 block leading-none">
+                    S/ {totalProductsIncome.toFixed(2)}
+                  </span>
+                  <span className="text-[11px] font-bold text-on-surface-variant">
+                    Total productos en sesiones
+                  </span>
+                </div>
               </div>
             </div>
-            <span className="font-serif font-bold text-lg text-emerald-700">
-              S/ {totalProductsIncome}
-            </span>
+
+            <div className="text-[11px] text-outline italic text-center py-1">
+              Descontados de stock de inventario
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Detalle de Ingresos (Citas y Ventas) con Selector Rápido de Método de Pago */}
+      {/* ===================================================================== */}
+      {/* 2. RENDIMIENTO Y LISTADO DE CLIENTES POR CADA ESPECIALISTA            */}
+      {/* ===================================================================== */}
       <section className="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container-high/60 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-surface-container-high">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+              <span className="material-symbols-outlined text-[20px]">badge</span>
+            </span>
+            <div>
+              <h3 className="font-serif text-lg font-bold text-primary">
+                Rendimiento & Clientes Atendidos por Especialista ({specialistsList.length})
+              </h3>
+              <p className="text-xs text-on-surface-variant">
+                Consulta exacta de qué clientes atendió cada profesional y cuántas sesiones generó
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {specialistsList.length === 0 ? (
+          <div className="py-8 text-center text-xs text-outline italic">
+            No hay atenciones de especialistas en este período.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3.5">
+            {specialistsList.map((spec) => {
+              const isSelected = selectedSpecialist === spec.name;
+              const isExpanded = expandedSpecialist === spec.name;
+
+              return (
+                <div
+                  key={spec.name}
+                  className={`rounded-2xl border-2 transition-all p-4 space-y-3 ${
+                    isSelected
+                      ? 'bg-primary/5 border-primary shadow-xs'
+                      : 'bg-surface-container-low/70 border-surface-container-high hover:border-primary/30'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary-container/20 text-primary font-bold text-base flex items-center justify-center flex-shrink-0">
+                        {spec.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-sm text-on-surface">{spec.name}</h4>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              spec.discipline === 'podologia'
+                                ? 'bg-primary/10 text-primary border border-primary/20'
+                                : 'bg-secondary/15 text-secondary border border-secondary/20'
+                            }`}
+                          >
+                            {spec.discipline === 'podologia' ? '🩺 Podología' : '💆 Masajes'}
+                          </span>
+                          <span className="text-[10px] font-semibold text-outline">
+                            {spec.role}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-on-surface-variant mt-0.5">
+                          Atendió a <strong>{spec.uniqueClientsCount} clientes</strong> en{' '}
+                          <strong>{spec.sessionsCount} sesiones</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      <div className="text-right pr-2">
+                        <span className="font-serif font-extrabold text-base text-primary block leading-none">
+                          S/ {spec.totalIncome.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-outline font-medium">
+                          Servicios: S/ {spec.serviceIncome.toFixed(2)}
+                          {spec.productsIncome > 0 ? ` + Prod: S/ ${spec.productsIncome.toFixed(2)}` : ''}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSpecialist(isSelected ? 'todos' : spec.name)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all ${
+                          isSelected
+                            ? 'bg-primary text-white shadow-xs'
+                            : 'bg-surface-container-lowest text-primary hover:bg-primary/10 border border-primary/20'
+                        }`}
+                        title="Filtrar todas las atenciones de este especialista en la tabla de ingresos"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">
+                          {isSelected ? 'check' : 'filter_alt'}
+                        </span>
+                        <span>{isSelected ? 'Filtrado' : 'Filtrar Citas'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setExpandedSpecialist(isExpanded ? null : spec.name)}
+                        className="px-3 py-1.5 rounded-xl bg-surface-container-lowest text-on-surface hover:text-primary border border-surface-container-high text-xs font-bold flex items-center gap-1"
+                        title="Ver lista detallada de clientes atendidos"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">
+                          {isExpanded ? 'expand_less' : 'groups'}
+                        </span>
+                        <span>
+                          {isExpanded
+                            ? 'Ocultar Pacientes'
+                            : `Ver ${spec.uniqueClientsCount} Pacientes`}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Lista desplegable de clientes atendidos por este profesional */}
+                  {isExpanded && (
+                    <div className="mt-3 pt-3 border-t border-surface-container-high/70 space-y-2 animate-fadeIn">
+                      <div className="flex items-center justify-between text-xs font-bold text-on-surface-variant pb-1">
+                        <span>Pacientes Atendidos por {spec.name}:</span>
+                        <span className="text-[11px] text-outline font-normal">
+                          {spec.clients.length} pacientes distintos
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {spec.clients.map((c, idx) => (
+                          <div
+                            key={`${c.clientName}-${idx}`}
+                            className="p-2.5 rounded-xl bg-surface-container-lowest border border-surface-container-high flex flex-col justify-between text-xs gap-1.5"
+                          >
+                            <div className="flex items-start justify-between gap-1">
+                              <span className="font-bold text-on-surface truncate">
+                                {c.clientName}
+                              </span>
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant flex-shrink-0">
+                                {c.sessionsCount} {c.sessionsCount === 1 ? 'cita' : 'citas'}
+                              </span>
+                            </div>
+
+                            <p className="text-[11px] text-outline line-clamp-1">
+                              {c.services.join(', ')}
+                            </p>
+
+                            <div className="flex items-center justify-between pt-1 border-t border-surface-container-high/60 text-[10px]">
+                              <span className="text-outline">
+                                {c.dates[c.dates.length - 1]}
+                              </span>
+                              <span className="font-bold text-primary">
+                                S/ {c.totalPaid.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* ===================================================================== */}
+      {/* 3. DETALLE DE INGRESOS CON BARRA DE FILTROS INTERACTIVA               */}
+      {/* ===================================================================== */}
+      <section className="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container-high/60 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">payments</span>
             <div>
@@ -780,26 +1205,147 @@ export default function ContabilidadPage() {
                 Detalle de Ingresos Cobrados en el Período
               </h3>
               <p className="text-[11px] text-on-surface-variant">
-                Puedes verificar o cambiar el medio de pago de cada sesión para que el cuadre salga exacto
+                Verifica cobros, medios de pago y atenciones con filtros por especialista y cliente
               </p>
             </div>
           </div>
           <span className="text-xs text-outline font-medium">
-            {filteredApts.length} sesiones
+            {displayedApts.length} de {filteredApts.length} sesiones
           </span>
+        </div>
+
+        {/* Barra de Filtros Interactivos: Disciplina, Especialista y Buscador de Cliente */}
+        <div className="p-3 bg-surface-container-low rounded-2xl border border-surface-container-high space-y-2.5">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
+              <span className="material-symbols-outlined text-[15px]">tune</span>
+              <span>Filtros de Búsqueda:</span>
+            </span>
+
+            {isFilteringActive && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedDiscipline('todas');
+                  setSelectedSpecialist('todos');
+                  setClientSearchFilter('');
+                }}
+                className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[14px]">clear</span>
+                <span>Limpiar filtros</span>
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+            {/* Píldoras de Disciplina */}
+            <div className="sm:col-span-5 flex rounded-xl bg-surface-container-lowest p-1 border border-surface-container-high">
+              <button
+                type="button"
+                onClick={() => setSelectedDiscipline('todas')}
+                className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all ${
+                  selectedDiscipline === 'todas'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-on-surface-variant hover:text-primary'
+                }`}
+              >
+                Todas ({filteredApts.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDiscipline('podologia')}
+                className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all ${
+                  selectedDiscipline === 'podologia'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-on-surface-variant hover:text-primary'
+                }`}
+              >
+                🩺 Podología ({podoApts.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDiscipline('masaje')}
+                className={`flex-1 py-1 px-2 rounded-lg text-xs font-bold transition-all ${
+                  selectedDiscipline === 'masaje'
+                    ? 'bg-secondary text-white shadow-xs'
+                    : 'text-on-surface-variant hover:text-secondary'
+                }`}
+              >
+                💆 Masajes ({spaApts.length})
+              </button>
+            </div>
+
+            {/* Selector de Especialista */}
+            <div className="sm:col-span-4">
+              <select
+                value={selectedSpecialist}
+                onChange={(e) => setSelectedSpecialist(e.target.value)}
+                className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl py-2 px-2.5 text-xs font-bold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="todos">-- Todos los Especialistas ({availableSpecialists.length}) --</option>
+                {specialistsList.map((spec) => (
+                  <option key={spec.name} value={spec.name}>
+                    {spec.name} ({spec.sessionsCount} sesiones · {spec.uniqueClientsCount} clientes)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Buscador de Cliente */}
+            <div className="sm:col-span-3 relative">
+              <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-outline text-[16px]">
+                search
+              </span>
+              <input
+                type="text"
+                placeholder="Buscar cliente..."
+                value={clientSearchFilter}
+                onChange={(e) => setClientSearchFilter(e.target.value)}
+                className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl pl-8 pr-7 py-2 text-xs font-semibold text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              {clientSearchFilter && (
+                <button
+                  type="button"
+                  onClick={() => setClientSearchFilter('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-outline hover:text-on-surface text-xs w-4 h-4 flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Banner resumen del filtro activo */}
+          {isFilteringActive && (
+            <div className="bg-primary/10 border border-primary/20 rounded-xl px-3 py-1.5 flex items-center justify-between text-xs text-primary font-semibold">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="material-symbols-outlined text-[15px]">filter_alt</span>
+                <span>
+                  Filtrando: {selectedDiscipline !== 'todas' ? (selectedDiscipline === 'podologia' ? '🩺 Podología' : '💆 Masajes') : ''}
+                  {selectedSpecialist !== 'todos' ? ` • ${selectedSpecialist}` : ''}
+                  {clientSearchFilter ? ` • "${clientSearchFilter}"` : ''}
+                </span>
+                <span className="font-bold">• {displayedApts.length} atenciones ({displayedUniqueClients} clientes)</span>
+              </div>
+              <span className="font-serif font-bold text-sm">
+                S/ {displayedIncome.toFixed(2)}
+              </span>
+            </div>
+          )}
         </div>
 
         {isLoading ? (
           <div className="py-6 text-center text-xs text-on-surface-variant">
             Cargando ingresos del período...
           </div>
-        ) : filteredApts.length === 0 ? (
+        ) : displayedApts.length === 0 ? (
           <div className="py-6 text-center text-xs text-on-surface-variant">
-            No hay sesiones registradas en este período.
+            No hay atenciones que coincidan con los filtros seleccionados.
           </div>
         ) : (
           <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-            {filteredApts.map((apt) => (
+            {displayedApts.map((apt) => (
               <div
                 key={apt.id}
                 className="p-3 bg-surface-container-low rounded-xl border border-surface-container-high flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs"
@@ -817,6 +1363,15 @@ export default function ContabilidadPage() {
                       }`}
                     >
                       {apt.status === 'completado' ? 'Cobrada' : 'Por cobrar'}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        getDiscipline(apt) === 'podologia'
+                          ? 'bg-blue-100 text-blue-900 border border-blue-200'
+                          : 'bg-amber-100 text-amber-900 border border-amber-200'
+                      }`}
+                    >
+                      {getDiscipline(apt) === 'podologia' ? '🩺 Podología' : '💆 Masaje'}
                     </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary-container/15 text-primary">
                       {apt.serviceName}
