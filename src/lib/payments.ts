@@ -22,16 +22,24 @@ export function getPaymentOption(method: PaymentMethod) {
  * - Si tiene pago mixto guardado (payments), lo usa.
  * - Si no, asume un único pago por el total con su paymentMethod (compatibilidad con citas antiguas).
  */
-export function getAptPayments(apt: Pick<Appointment, 'payments' | 'paymentMethod' | 'price'>): PaymentSplit[] {
+export function getAptPayments(
+  apt: Pick<Appointment, 'payments' | 'paymentMethod' | 'price'> &
+    Partial<Pick<Appointment, 'depositAmount' | 'depositPaymentMethod' | 'status'>>
+): PaymentSplit[] {
   if (apt.payments && apt.payments.length > 0) {
     return apt.payments.filter((p) => Number(p.amount) > 0 || apt.payments!.length === 1);
+  }
+  // Si la cita aún no está completada pero tiene un adelanto cobrado
+  if (apt.status !== 'completado' && apt.depositAmount && Number(apt.depositAmount) > 0) {
+    return [{ method: apt.depositPaymentMethod || 'yape_plin', amount: Number(apt.depositAmount) }];
   }
   return [{ method: apt.paymentMethod || 'efectivo', amount: Number(apt.price) || 0 }];
 }
 
-/** Monto pagado con un método concreto en una cita (considera pagos mixtos). */
+/** Monto pagado con un método concreto en una cita (considera pagos mixtos y adelantos). */
 export function getAptAmountForMethod(
-  apt: Pick<Appointment, 'payments' | 'paymentMethod' | 'price'>,
+  apt: Pick<Appointment, 'payments' | 'paymentMethod' | 'price'> &
+    Partial<Pick<Appointment, 'depositAmount' | 'depositPaymentMethod' | 'status'>>,
   method: PaymentMethod
 ): number {
   return getAptPayments(apt)

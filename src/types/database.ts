@@ -75,6 +75,11 @@ export interface Appointment {
   servicePrice?: number; // Precio base del servicio
   soldProducts?: SoldProductItem[];
   productsTotal?: number;
+  // Adelanto / Depósito de reserva
+  depositAmount?: number; // Monto cobrado como adelanto (ej. S/ 30.00)
+  depositPaymentMethod?: PaymentMethod; // Medio del adelanto ('yape_plin' | 'efectivo' | 'tarjeta' | 'transferencia')
+  depositDate?: string; // Fecha en la que se cobró el adelanto (YYYY-MM-DD)
+  depositNotes?: string; // Observaciones del adelanto (ej. "Yape Op. 49201")
   paymentMethod?: PaymentMethod; // Medio de pago para el cuadre de caja
   payments?: PaymentSplit[]; // Desglose de pago mixto (ej. parte efectivo + parte Yape)
   blockColor?: string; // Color personalizado en vista calendario

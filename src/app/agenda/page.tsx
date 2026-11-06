@@ -640,9 +640,19 @@ export default function AgendaPage() {
             <span className="w-1.5 h-1.5 rounded-full bg-white/70 flex-shrink-0"></span>
             <span className="truncate">{apt.professionalName}</span>
           </span>
-          <span className="font-bold flex-shrink-0 bg-white/20 px-1 py-0.2 rounded text-[9px]">
-            S/{apt.price}
-          </span>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {apt.depositAmount && Number(apt.depositAmount) > 0 && apt.status !== 'completado' && (
+              <span
+                title={`Adelanto: S/${apt.depositAmount} · Saldo pendiente: S/${Math.max(0, (Number(apt.price) || 0) - Number(apt.depositAmount))}`}
+                className="bg-emerald-950/75 border border-emerald-400/60 text-emerald-200 px-1 py-0.2 rounded text-[8.5px] font-bold"
+              >
+                Adel. S/{apt.depositAmount}
+              </span>
+            )}
+            <span className="font-bold flex-shrink-0 bg-white/20 px-1 py-0.2 rounded text-[9px]">
+              S/{apt.price}
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -1372,9 +1382,19 @@ export default function AgendaPage() {
                                     </span>
                                   )}
                                 </span>
-                                <span className="text-[9px] opacity-90 font-bold flex-shrink-0">
-                                  S/{apt.price}
-                                </span>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {apt.depositAmount && Number(apt.depositAmount) > 0 && apt.status !== 'completado' && (
+                                    <span
+                                      className="bg-emerald-950/75 text-emerald-200 border border-emerald-400/50 text-[7.5px] font-bold px-1 rounded"
+                                      title={`Adelanto: S/${apt.depositAmount}`}
+                                    >
+                                      Adel. S/{apt.depositAmount}
+                                    </span>
+                                  )}
+                                  <span className="text-[9px] opacity-90 font-bold flex-shrink-0">
+                                    S/{apt.price}
+                                  </span>
+                                </div>
                               </div>
                             );
                           })}
@@ -1538,6 +1558,14 @@ export default function AgendaPage() {
                                 );
                               })}
                             </div>
+                          )}
+                          {apt.depositAmount && Number(apt.depositAmount) > 0 && !isCompleted && (
+                            <span
+                              className="px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold"
+                              title={`Adelanto previo: S/ ${Number(apt.depositAmount).toFixed(2)}`}
+                            >
+                              Adelanto S/{Number(apt.depositAmount).toFixed(2)} · Resta S/{(Math.max(0, (Number(apt.price) || 0) - Number(apt.depositAmount))).toFixed(2)}
+                            </span>
                           )}
                           <span className="text-xs font-bold text-primary">
                             S/ {apt.price}

@@ -288,6 +288,41 @@ export default function AppointmentBottomSheet({
             </div>
           )}
 
+          {/* Tarjeta informativa de Adelanto y Saldo Restante */}
+          {appointment.depositAmount && Number(appointment.depositAmount) > 0 && (
+            <div className="pt-2 border-t border-surface-container-high/60">
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                    <span className="material-symbols-outlined text-[16px] text-emerald-700">savings</span>
+                    <span>
+                      Adelanto Pagado: S/ {Number(appointment.depositAmount).toFixed(2)}
+                      {appointment.depositPaymentMethod && (
+                        <span className="font-semibold text-emerald-800 ml-1">
+                          ({getPaymentOption(appointment.depositPaymentMethod).shortLabel})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {appointment.status !== 'completado' ? (
+                    <span className="font-extrabold text-primary bg-primary-container/20 px-2 py-0.5 rounded-md">
+                      Saldo restante: S/ {Math.max(0, (Number(appointment.price) || 0) - Number(appointment.depositAmount)).toFixed(2)}
+                    </span>
+                  ) : (
+                    <span className="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                      ✓ Saldo liquidado
+                    </span>
+                  )}
+                </div>
+                {appointment.depositNotes && (
+                  <p className="text-[11px] text-emerald-800 mt-1 pl-5 font-medium">
+                    Ref: {appointment.depositNotes}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Desglose de método(s) de pago */}
           {(appointment.status === 'completado' || appointment.payments) && (
             <div className="pt-2 border-t border-surface-container-high/60 flex items-center justify-between gap-2 flex-wrap">

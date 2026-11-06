@@ -1359,11 +1359,24 @@ export default function ContabilidadPage() {
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         apt.status === 'completado'
                           ? 'bg-emerald-100 text-emerald-800'
+                          : apt.depositAmount && Number(apt.depositAmount) > 0
+                          ? 'bg-sky-100 text-sky-800 border border-sky-300'
                           : 'bg-amber-100 text-amber-800'
                       }`}
                     >
-                      {apt.status === 'completado' ? 'Cobrada' : 'Por cobrar'}
+                      {apt.status === 'completado'
+                        ? 'Cobrada'
+                        : apt.depositAmount && Number(apt.depositAmount) > 0
+                        ? 'Adelanto cobrado'
+                        : 'Por cobrar'}
                     </span>
+                    {apt.depositAmount && Number(apt.depositAmount) > 0 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                        Adelanto: S/ {Number(apt.depositAmount).toFixed(2)}
+                        {apt.status !== 'completado' &&
+                          ` (Resta S/ ${(Math.max(0, (Number(apt.price) || 0) - Number(apt.depositAmount))).toFixed(2)})`}
+                      </span>
+                    )}
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         getDiscipline(apt) === 'podologia'

@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Appointment, Client, Professional, ServicePackage } from '@/types/database';
+import { Appointment, Client, Professional, ServicePackage, PaymentMethod } from '@/types/database';
 import { dbService } from '@/lib/dbService';
 import { formatTime12, getTimeOptions12 } from '@/lib/timeUtils';
 import { getLocalDateStr } from '@/lib/dateUtils';
+import { PAYMENT_METHOD_OPTIONS } from '@/lib/payments';
 
 export const BLOCK_COLOR_PALETTE = [
   { id: '#7A4F3A', label: 'Terracota Spa' },
@@ -64,6 +65,11 @@ export default function NewAppointmentModal({
   const [blockColor, setBlockColor] = useState(BLOCK_COLOR_PALETTE[0].id);
   const [customTag, setCustomTag] = useState('');
   const [tagColor, setTagColor] = useState('#D97706');
+  // Adelanto / Reserva de Cita
+  const [hasDeposit, setHasDeposit] = useState(false);
+  const [depositAmount, setDepositAmount] = useState<string>('');
+  const [depositPaymentMethod, setDepositPaymentMethod] = useState<PaymentMethod>('yape_plin');
+  const [depositNotes, setDepositNotes] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   // Prellenar únicamente al abrir el modal o cambiar la cita que se edita
@@ -90,6 +96,17 @@ export default function NewAppointmentModal({
       setBlockColor(editingAppointment.blockColor || BLOCK_COLOR_PALETTE[0].id);
       setCustomTag(editingAppointment.customTag || '');
       setTagColor(editingAppointment.tagColor || '#D97706');
+      if (editingAppointment.depositAmount && editingAppointment.depositAmount > 0) {
+        setHasDeposit(true);
+        setDepositAmount(String(editingAppointment.depositAmount));
+        setDepositPaymentMethod(editingAppointment.depositPaymentMethod || 'yape_plin');
+        setDepositNotes(editingAppointment.depositNotes || '');
+      } else {
+        setHasDeposit(false);
+        setDepositAmount('');
+        setDepositPaymentMethod('yape_plin');
+        setDepositNotes('');
+      }
     } else {
       const initialClient = clients.find((c) => c.id === selectedClientId) || clients[0];
       const initialId = initialClient?.id || '';
@@ -104,6 +121,10 @@ export default function NewAppointmentModal({
       setBlockColor(BLOCK_COLOR_PALETTE[0].id);
       setCustomTag('');
       setTagColor('#D97706');
+      setHasDeposit(false);
+      setDepositAmount('');
+      setDepositPaymentMethod('yape_plin');
+      setDepositNotes('');
       setServiceName('');
       setPrice('');
       setDuration('45');
@@ -207,6 +228,7 @@ export default function NewAppointmentModal({
 
     const numericPrice = Number(price) || 0;
     const numericDuration = Number(duration) || 45;
+    const numDeposit = hasDeposit ? Number(depositAmount) || 0 : 0;
 
     // Si la cita ya tenía productos asociados, el servicePrice es el precio base del servicio.
     // De lo contrario, el precio ingresado en este formulario corresponde directamente al precio del servicio.
@@ -231,6 +253,10 @@ export default function NewAppointmentModal({
       servicePrice: computedServicePrice,
       soldProducts: editingAppointment?.soldProducts,
       productsTotal: editingAppointment?.productsTotal,
+      depositAmount: numDeposit > 0 ? numDeposit : undefined,
+      depositPaymentMethod: numDeposit > 0 ? depositPaymentMethod : undefined,
+      depositDate: numDeposit > 0 ? (editingAppointment?.depositDate || date || todayStr()) : undefined,
+      depositNotes: numDeposit > 0 ? depositNotes.trim() || undefined : undefined,
       blockColor,
       customTag: customTag.trim() || undefined,
       tagColor: customTag.trim() ? tagColor : undefined,
@@ -664,7 +690,124 @@ export default function NewAppointmentModal({
             </div>
           </div>
 
-          {/* 6. Color del Bloque en Vista Calendario */}
+          {/* 6. Adelanto / Reserva de Cita (Opcional) */}
+          <div className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container-high/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-on-surface flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hasDeposit}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setHasDeposit(checked);
+                    if (checked && !depositAmount) {
+                      const p = Number(price) || 0;
+                      if (p > 0) setDepositAmount(String(Math.round(p * 0.5)));
+                    }
+                  }}
+                  className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                />
+                <span className="material-symbols-outlined text-[18px] text-tertiary-container">payments</span>
+                <span>¿El cliente dejó un adelanto para asegurar su cita?</span>
+              </label>
+              {hasDeposit && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  Adelanto Activo
+                </span>
+              )}
+            </div>
+
+            {hasDeposit && (
+              <div className="pt-2 border-t border-surface-container-high space-y-2.5">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant block">
+                      Monto del Adelanto (S/) *
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Ej. 30"
+                      value={depositAmount}
+                      onFocus={(e) => e.target.select()}
+                      onChange={(e) => {
+                        const cleaned = e.target.value
+                          .replace(/[^0-9.]/g, '')
+                          .replace(/^0+(?=\d)/, '');
+                        setDepositAmount(cleaned);
+                      }}
+                      className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-on-surface-variant block">
+                      Medio del Adelanto *
+                    </label>
+                    <select
+                      value={depositPaymentMethod}
+                      onChange={(e) => setDepositPaymentMethod(e.target.value as PaymentMethod)}
+                      className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {PAYMENT_METHOD_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-on-surface-variant block">
+                    Nº de Operación / Nota del Adelanto (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Yape Op. 481920 · Pagado por WhatsApp"
+                    value={depositNotes}
+                    onChange={(e) => setDepositNotes(e.target.value)}
+                    className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2 text-xs text-on-surface focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+
+                {/* Resumen dinámico del saldo a cobrar */}
+                {(() => {
+                  const numPrice = Number(price) || 0;
+                  const numDeposit = Number(depositAmount) || 0;
+                  const remaining = Math.max(0, numPrice - numDeposit);
+                  const isOver = numDeposit > numPrice && numPrice > 0;
+                  return (
+                    <div
+                      className={`p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 border ${
+                        isOver
+                          ? 'bg-amber-50 border-amber-300 text-amber-900'
+                          : 'bg-primary-container/10 border-primary/20 text-on-surface'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="material-symbols-outlined text-[17px] text-primary">calculate</span>
+                        <span className="text-[11px] font-medium truncate">
+                          {isOver
+                            ? 'El adelanto supera la tarifa estimada'
+                            : `Adelanto: S/ ${numDeposit.toFixed(2)} (${
+                                PAYMENT_METHOD_OPTIONS.find((o) => o.value === depositPaymentMethod)?.shortLabel ||
+                                depositPaymentMethod
+                              })`}
+                        </span>
+                      </div>
+                      <div className="text-right flex-shrink-0 font-bold">
+                        <span className="text-[10px] text-outline block">Saldo a cobrar en cabina</span>
+                        <span className="text-xs text-primary font-extrabold">S/ {remaining.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+
+          {/* 7. Color del Bloque en Vista Calendario */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-on-surface-variant flex items-center gap-1">
