@@ -795,7 +795,7 @@ export default function FinalizeSessionModal({
                 {depositPaid > 0 && (
                   <>
                     <div className="flex justify-between text-xs text-emerald-800 font-bold">
-                      <span>Adelanto previo deducido ({depositOption.shortLabel}):</span>
+                      <span>Adelanto previo deducido ({depositOption.label}):</span>
                       <span>- S/ {depositPaid.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm font-extrabold text-emerald-950 pt-1 border-t border-emerald-200">
