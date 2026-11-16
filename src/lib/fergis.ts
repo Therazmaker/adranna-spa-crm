@@ -8,17 +8,22 @@ export const FERGIS_ROLE = 'Recepción / Masajista';
 
 export interface FergisConfig {
   monthlySalary: number; // S/ mensuales
-  monthlyHours: number; // horas que cubre el sueldo (Perú: 30 días × 8 h = 240)
+  hourlyRate: number; // valor hora que se descuenta (fijado a mano)
   defaultPercent: number; // % del masaje que se le paga
 }
 
 export const DEFAULT_FERGIS_CONFIG: FergisConfig = {
   monthlySalary: 1500,
-  monthlyHours: 240,
+  hourlyRate: 8.24,
   defaultPercent: 40,
 };
 
-const CONFIG_KEY = 'adranna_fergis_config_v1';
+const CONFIG_KEY = 'adranna_fergis_config_v2';
+
+// La profesional asignada es Fergis
+export function isFergisName(name?: string): boolean {
+  return !!name && name.trim().toLowerCase().startsWith(FERGIS_NAME.toLowerCase());
+}
 
 export function getFergisConfig(): FergisConfig {
   if (typeof window === 'undefined') return DEFAULT_FERGIS_CONFIG;
@@ -28,7 +33,7 @@ export function getFergisConfig(): FergisConfig {
     const parsed = JSON.parse(raw) as Partial<FergisConfig>;
     return {
       monthlySalary: Number(parsed.monthlySalary) || DEFAULT_FERGIS_CONFIG.monthlySalary,
-      monthlyHours: Number(parsed.monthlyHours) || DEFAULT_FERGIS_CONFIG.monthlyHours,
+      hourlyRate: Number(parsed.hourlyRate) || DEFAULT_FERGIS_CONFIG.hourlyRate,
       defaultPercent:
         parsed.defaultPercent !== undefined && !Number.isNaN(Number(parsed.defaultPercent))
           ? Number(parsed.defaultPercent)
@@ -49,7 +54,7 @@ export function saveFergisConfig(config: FergisConfig): void {
 }
 
 export function getHourlyRate(config: FergisConfig): number {
-  return config.monthlyHours > 0 ? config.monthlySalary / config.monthlyHours : 0;
+  return Number(config.hourlyRate) || 0;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -79,7 +84,7 @@ export function calcFergisMassage(apt: Appointment, config: FergisConfig): Fergi
   const durationMinutes = Number(fm.durationMinutes ?? apt.durationMinutes) || 0;
   const price = getFergisMassagePrice(apt);
   const percent = Number(fm.percent ?? config.defaultPercent) || 0;
-  // Tarifa congelada al agendar, para que un cambio de sueldo no altere sesiones pasadas
+  // Valor hora congelado al agendar, para que un cambio de ajustes no altere sesiones pasadas
   const hourlyRate = Number(fm.hourlyRate) || getHourlyRate(config);
   const hours = durationMinutes / 60;
   const deduction = round2(hours * hourlyRate);

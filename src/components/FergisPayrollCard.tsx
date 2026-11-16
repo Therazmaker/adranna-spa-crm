@@ -23,7 +23,7 @@ const money = (n: number) => `S/ ${n.toFixed(2)}`;
 export default function FergisPayrollCard({ appointments, periodLabel, isMonthPeriod }: FergisPayrollCardProps) {
   const [config, setConfig] = useState<FergisConfig>(DEFAULT_FERGIS_CONFIG);
   const [isEditingConfig, setIsEditingConfig] = useState(false);
-  const [draft, setDraft] = useState({ salary: '', hours: '', percent: '' });
+  const [draft, setDraft] = useState({ salary: '', rate: '', percent: '' });
 
   useEffect(() => {
     setConfig(getFergisConfig());
@@ -47,7 +47,7 @@ export default function FergisPayrollCard({ appointments, periodLabel, isMonthPe
   const openConfig = () => {
     setDraft({
       salary: String(config.monthlySalary),
-      hours: String(config.monthlyHours),
+      rate: String(config.hourlyRate),
       percent: String(config.defaultPercent),
     });
     setIsEditingConfig(true);
@@ -56,7 +56,7 @@ export default function FergisPayrollCard({ appointments, periodLabel, isMonthPe
   const handleSaveConfig = () => {
     const next: FergisConfig = {
       monthlySalary: Number(draft.salary) || DEFAULT_FERGIS_CONFIG.monthlySalary,
-      monthlyHours: Number(draft.hours) || DEFAULT_FERGIS_CONFIG.monthlyHours,
+      hourlyRate: Number(draft.rate) || DEFAULT_FERGIS_CONFIG.hourlyRate,
       defaultPercent: Number(draft.percent) || 0,
     };
     saveFergisConfig(next);
@@ -72,8 +72,8 @@ export default function FergisPayrollCard({ appointments, periodLabel, isMonthPe
           <div>
             <h3 className="font-serif text-lg font-bold text-primary">Fergis · Recepción y Masajes</h3>
             <p className="text-[11px] text-outline">
-              {periodLabel} · Sueldo {money(config.monthlySalary)} / {config.monthlyHours} h ={' '}
-              {money(getHourlyRate(config))} por hora · Comisión por defecto {config.defaultPercent}%
+              {periodLabel} · Sueldo {money(config.monthlySalary)} · Valor hora {money(getHourlyRate(config))} ·
+              Comisión por defecto {config.defaultPercent}%
             </p>
           </div>
         </div>
@@ -92,7 +92,7 @@ export default function FergisPayrollCard({ appointments, periodLabel, isMonthPe
             {(
               [
                 ['salary', 'Sueldo mensual (S/)'],
-                ['hours', 'Horas al mes'],
+                ['rate', 'Valor hora (S/)'],
                 ['percent', 'Comisión por defecto (%)'],
               ] as const
             ).map(([key, label]) => (
@@ -110,8 +110,8 @@ export default function FergisPayrollCard({ appointments, periodLabel, isMonthPe
             ))}
           </div>
           <p className="text-[10px] text-outline">
-            Cada masaje guarda el valor hora con el que se agendó, así que cambiar el sueldo solo afecta a los
-            masajes que se agenden desde ahora.
+            Cada masaje guarda el valor hora con el que se agendó, así que cambiar estos ajustes solo afecta a
+            los masajes que se agenden desde ahora.
           </p>
           <button
             type="button"
@@ -162,7 +162,7 @@ export default function FergisPayrollCard({ appointments, periodLabel, isMonthPe
       {/* Lista de masajes */}
       {rows.length === 0 ? (
         <p className="text-xs text-outline text-center py-4">
-          No hay masajes de Fergis en este período. Márcalos con la casilla &quot;¿Este masaje lo hace Fergis?&quot; al agendar.
+          No hay masajes de Fergis en este período. Al agendar, elige a Fergis como profesional asignada.
         </p>
       ) : (
         <div className="overflow-x-auto -mx-1">
