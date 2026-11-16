@@ -685,7 +685,9 @@ export const dbService = {
       updates.payments !== undefined ||
       updates.blockColor !== undefined ||
       updates.customTag !== undefined ||
-      updates.tagColor !== undefined
+      updates.tagColor !== undefined ||
+      'depositAmount' in updates ||
+      'fergisMassage' in updates
     ) {
       const target = updatedLocal || (updates as Appointment);
       payload.notes = encodeAptNotes(target);
@@ -1484,6 +1486,13 @@ function encodeAptNotes(a: Partial<Appointment>): string | null {
   if (a.blockColor) meta.blockColor = a.blockColor;
   if (a.customTag !== undefined) meta.customTag = a.customTag;
   if (a.tagColor !== undefined) meta.tagColor = a.tagColor;
+  if (a.depositAmount !== undefined && Number(a.depositAmount) > 0) {
+    meta.depositAmount = a.depositAmount;
+    if (a.depositPaymentMethod) meta.depositPaymentMethod = a.depositPaymentMethod;
+    if (a.depositDate) meta.depositDate = a.depositDate;
+    if (a.depositNotes) meta.depositNotes = a.depositNotes;
+  }
+  if (a.fergisMassage) meta.fergisMassage = a.fergisMassage;
   const hasMeta = Object.keys(meta).length > 0;
   if (!cleanNotes && !hasMeta) return null;
   return `${cleanNotes || ''}${hasMeta ? `${META_MARKER}${JSON.stringify(meta)}${META_END}` : ''}`;
@@ -1528,6 +1537,11 @@ function mapAppointment(a: any): Appointment {
     blockColor?: string;
     customTag?: string;
     tagColor?: string;
+    depositAmount?: number;
+    depositPaymentMethod?: Appointment['depositPaymentMethod'];
+    depositDate?: string;
+    depositNotes?: string;
+    fergisMassage?: Appointment['fergisMassage'];
   }>(a.notes);
 
   const rawDiscipline = a.discipline;
@@ -1555,6 +1569,11 @@ function mapAppointment(a: any): Appointment {
     blockColor: meta.blockColor,
     customTag: meta.customTag,
     tagColor: meta.tagColor,
+    depositAmount: meta.depositAmount,
+    depositPaymentMethod: meta.depositPaymentMethod,
+    depositDate: meta.depositDate,
+    depositNotes: meta.depositNotes,
+    fergisMassage: meta.fergisMassage,
     status: a.status, date: a.appointment_date,
     time: a.appointment_time?.slice(0, 5) || '10:00',
     hasMedicalAlert: a.has_medical_alert, medicalAlertText: a.medical_alert_text,

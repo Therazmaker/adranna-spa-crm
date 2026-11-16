@@ -93,6 +93,13 @@ export interface Appointment {
   hasPendingConsent?: boolean;
   notes?: string; // OBSERVACIONES (hallazgos clínicos de la sesión)
   procedure?: string; // PROCEDIMIENTO (qué se le realizó y recomendaciones)
+  // Masaje realizado por Fergis (recepcionista): descuento de horas + comisión
+  fergisMassage?: {
+    durationMinutes?: number; // vacío = usa la duración de la cita
+    price?: number; // vacío = usa el precio del servicio de la cita
+    percent: number; // % del masaje que se le paga (ej. 40)
+    hourlyRate: number; // valor hora del sueldo al momento de agendar
+  };
 }
 
 export interface FootFinding {

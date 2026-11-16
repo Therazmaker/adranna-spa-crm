@@ -7,6 +7,12 @@ import { dbService } from '@/lib/dbService';
 import { formatTime12, getTimeOptions12 } from '@/lib/timeUtils';
 import { getLocalDateStr } from '@/lib/dateUtils';
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payments';
+import {
+  FERGIS_NAME,
+  FERGIS_ROLE,
+  getFergisConfig,
+  getHourlyRate,
+} from '@/lib/fergis';
 
 export const BLOCK_COLOR_PALETTE = [
   { id: '#7A4F3A', label: 'Terracota Spa' },
@@ -70,6 +76,11 @@ export default function NewAppointmentModal({
   const [depositAmount, setDepositAmount] = useState<string>('');
   const [depositPaymentMethod, setDepositPaymentMethod] = useState<PaymentMethod>('yape_plin');
   const [depositNotes, setDepositNotes] = useState('');
+  // Masaje realizado por Fergis (recepcionista)
+  const [isFergis, setIsFergis] = useState(false);
+  const [fergisDuration, setFergisDuration] = useState<string>('');
+  const [fergisPrice, setFergisPrice] = useState<string>('');
+  const [fergisPercent, setFergisPercent] = useState<string>('40');
   const [isSaving, setIsSaving] = useState(false);
 
   // Prellenar únicamente al abrir el modal o cambiar la cita que se edita
@@ -107,6 +118,11 @@ export default function NewAppointmentModal({
         setDepositPaymentMethod('yape_plin');
         setDepositNotes('');
       }
+      const fm = editingAppointment.fergisMassage;
+      setIsFergis(!!fm);
+      setFergisDuration(fm?.durationMinutes !== undefined ? String(fm.durationMinutes) : '');
+      setFergisPrice(fm?.price !== undefined ? String(fm.price) : '');
+      setFergisPercent(String(fm?.percent ?? getFergisConfig().defaultPercent));
     } else {
       const initialClient = clients.find((c) => c.id === selectedClientId) || clients[0];
       const initialId = initialClient?.id || '';
@@ -125,6 +141,10 @@ export default function NewAppointmentModal({
       setDepositAmount('');
       setDepositPaymentMethod('yape_plin');
       setDepositNotes('');
+      setIsFergis(false);
+      setFergisDuration('');
+      setFergisPrice('');
+      setFergisPercent(String(getFergisConfig().defaultPercent));
       setServiceName('');
       setPrice('');
       setDuration('45');
@@ -238,6 +258,17 @@ export default function NewAppointmentModal({
         ? Math.max(0, numericPrice - prevProdTotal)
         : numericPrice;
 
+    // Al editar se conserva la tarifa hora con la que se agendó
+    const fergisMassage: Appointment['fergisMassage'] = isFergis
+      ? {
+          durationMinutes: fergisDuration.trim() !== '' ? Number(fergisDuration) || 0 : undefined,
+          price: fergisPrice.trim() !== '' ? Number(fergisPrice) || 0 : undefined,
+          percent: Number(fergisPercent) || 0,
+          hourlyRate:
+            editingAppointment?.fergisMassage?.hourlyRate ?? getHourlyRate(getFergisConfig()),
+        }
+      : undefined;
+
     const base = {
       clientId: client.id,
       clientName: client.name,
@@ -257,6 +288,7 @@ export default function NewAppointmentModal({
       depositPaymentMethod: numDeposit > 0 ? depositPaymentMethod : undefined,
       depositDate: numDeposit > 0 ? (editingAppointment?.depositDate || date || todayStr()) : undefined,
       depositNotes: numDeposit > 0 ? depositNotes.trim() || undefined : undefined,
+      fergisMassage,
       blockColor,
       customTag: customTag.trim() || undefined,
       tagColor: customTag.trim() ? tagColor : undefined,
@@ -805,6 +837,120 @@ export default function NewAppointmentModal({
                 })()}
               </div>
             )}
+          </div>
+
+          {/* 6b. Masaje realizado por Fergis (descuento de horas + comisión) */}
+          <div className="p-3.5 rounded-2xl bg-surface-container-low border border-surface-container-high/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-on-surface flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isFergis}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsFergis(checked);
+                    if (checked) {
+                      const found = professionalsList.find(
+                        (p) => p.name.trim().toLowerCase().startsWith(FERGIS_NAME.toLowerCase())
+                      );
+                      setProfessional(found ? found.name : FERGIS_NAME);
+                      setProfRole(found ? found.role : FERGIS_ROLE);
+                      setDiscipline('masaje');
+                    }
+                  }}
+                  className="rounded text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                />
+                <span className="material-symbols-outlined text-[18px] text-tertiary-container">badge</span>
+                <span>¿Este masaje lo hace Fergis?</span>
+              </label>
+              {isFergis && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-violet-100 text-violet-800 border border-violet-300">
+                  Fergis
+                </span>
+              )}
+            </div>
+
+            {isFergis && (() => {
+              const config = getFergisConfig();
+              const hourlyRate =
+                editingAppointment?.fergisMassage?.hourlyRate ?? getHourlyRate(config);
+              const effDuration =
+                fergisDuration.trim() !== '' ? Number(fergisDuration) || 0 : Number(duration) || 0;
+              const effPrice = fergisPrice.trim() !== '' ? Number(fergisPrice) || 0 : Number(price) || 0;
+              const pct = Number(fergisPercent) || 0;
+              const deduction = (effDuration / 60) * hourlyRate;
+              const commission = (effPrice * pct) / 100;
+              const net = commission - deduction;
+              const cleanNum = (v: string) => v.replace(/[^0-9.]/g, '').replace(/^0+(?=\d)/, '');
+              return (
+                <div className="pt-2 border-t border-surface-container-high space-y-2.5">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-on-surface-variant block">
+                        Tiempo (min)
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder={duration || '60'}
+                        value={fergisDuration}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setFergisDuration(cleanNum(e.target.value))}
+                        className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-on-surface-variant block">
+                        Precio (S/)
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder={price || '0'}
+                        value={fergisPrice}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setFergisPrice(cleanNum(e.target.value))}
+                        className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-on-surface-variant block">
+                        Comisión (%)
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="40"
+                        value={fergisPercent}
+                        onFocus={(e) => e.target.select()}
+                        onChange={(e) => setFergisPercent(cleanNum(e.target.value))}
+                        className="w-full bg-surface-container-lowest border border-surface-container-high rounded-xl p-2.5 text-xs font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-outline block">
+                    Si dejas tiempo o precio vacíos, se usan los de la cita (el precio final al cobrar).
+                  </span>
+
+                  <div className="p-2.5 rounded-xl text-[11px] bg-primary-container/10 border border-primary/20 text-on-surface space-y-1">
+                    <div className="flex justify-between">
+                      <span>Descuento ({(effDuration / 60).toFixed(2)} h × S/ {hourlyRate.toFixed(2)})</span>
+                      <span className="font-bold text-error">− S/ {deduction.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Comisión ({pct}% de S/ {effPrice.toFixed(2)})</span>
+                      <span className="font-bold text-emerald-700">+ S/ {commission.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between pt-1 border-t border-primary/10">
+                      <span className="font-bold">Efecto en su pago</span>
+                      <span className={`font-extrabold ${net >= 0 ? 'text-emerald-700' : 'text-error'}`}>
+                        {net >= 0 ? '+' : '−'} S/ {Math.abs(net).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* 7. Color del Bloque en Vista Calendario */}

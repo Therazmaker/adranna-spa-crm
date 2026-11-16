@@ -9,6 +9,7 @@ import { getAptAmountForMethod, getAptPayments, getPaymentOption, isMixedPayment
 import { exportCashReconciliationExcel } from '@/lib/excelExport';
 import { getLocalDateStr, getStartOfWeekLocal, getStartOfMonthLocal } from '@/lib/dateUtils';
 import { formatTime12 } from '@/lib/timeUtils';
+import FergisPayrollCard from '@/components/FergisPayrollCard';
 
 const EXPENSE_CATEGORIES = [
   { label: 'Insumos Clínicos & Descartables', value: 'insumos' },
@@ -1446,6 +1447,13 @@ export default function ContabilidadPage() {
           </div>
         )}
       </section>
+
+      {/* Fergis: descuento de horas y comisión por masajes */}
+      <FergisPayrollCard
+        appointments={filteredApts}
+        periodLabel={periodLabels[period].label}
+        isMonthPeriod={period === 'month'}
+      />
 
       {/* Registro de Egresos & Compras del Spa */}
       <section className="bg-surface-container-lowest p-5 rounded-2xl border border-surface-container-high/60 shadow-xs space-y-4">
