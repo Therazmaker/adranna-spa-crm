@@ -7,7 +7,7 @@ import { dbService } from '@/lib/dbService';
 import { Appointment, Expense, PaymentMethod } from '@/types/database';
 import { getAptAmountForMethod, getAptPayments, getPaymentOption, isMixedPayment } from '@/lib/payments';
 import { exportCashReconciliationExcel } from '@/lib/excelExport';
-import { getLocalDateStr, getStartOfWeekLocal, getStartOfMonthLocal } from '@/lib/dateUtils';
+import { getLocalDateStr, getStartOfWeekLocal, getStartOfMonthLocal, getQuincenaRangeLocal } from '@/lib/dateUtils';
 import { formatTime12 } from '@/lib/timeUtils';
 import FergisPayrollCard from '@/components/FergisPayrollCard';
 
@@ -55,7 +55,7 @@ export default function ContabilidadPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [period, setPeriod] = useState<'today' | 'custom_date' | 'week' | 'month' | 'all'>('today');
+  const [period, setPeriod] = useState<'today' | 'custom_date' | 'week' | 'quincena' | 'month' | 'all'>('today');
   const [customDate, setCustomDate] = useState(() => getLocalDateStr());
 
   // Filtros interactivos por Especialidad, Especialista y Buscador de Cliente
@@ -182,12 +182,14 @@ export default function ContabilidadPage() {
   const todayStr = getLocalDateStr();
   const startOfWeek = getStartOfWeekLocal();
   const startOfMonth = getStartOfMonthLocal();
+  const quincena = getQuincenaRangeLocal();
 
   const filterByDate = (dateStr?: string) => {
     if (!dateStr) return period === 'all';
     if (period === 'today') return dateStr === todayStr;
     if (period === 'custom_date') return dateStr === customDate;
     if (period === 'week') return dateStr >= startOfWeek;
+    if (period === 'quincena') return dateStr >= quincena.start && dateStr <= quincena.end;
     if (period === 'month') return dateStr >= startOfMonth;
     return true;
   };
@@ -363,6 +365,7 @@ export default function ContabilidadPage() {
     today: { label: 'Hoy', range: todayStr },
     custom_date: { label: `Día ${customDate}`, range: customDate },
     week: { label: 'Esta Semana', range: `${startOfWeek} al ${todayStr}` },
+    quincena: { label: 'Esta Quincena', range: `${quincena.start} al ${quincena.end}` },
     month: { label: 'Este Mes', range: `${startOfMonth} al ${todayStr}` },
     all: { label: 'Todo el Historial', range: 'Histórico Completo' },
   };
@@ -502,6 +505,7 @@ export default function ContabilidadPage() {
               { label: 'Hoy', value: 'today' },
               { label: 'Elegir Día', value: 'custom_date' },
               { label: 'Esta Semana', value: 'week' },
+              { label: 'Esta Quincena', value: 'quincena' },
               { label: 'Este Mes', value: 'month' },
               { label: 'Todo el Historial', value: 'all' },
             ] as const

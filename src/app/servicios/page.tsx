@@ -319,7 +319,7 @@ export default function ServiciosPage() {
                     type="number"
                     required
                     min={0}
-                    step={10}
+                    step="0.01"
                     value={price}
                     onChange={(e) => setPrice(Number(e.target.value))}
                     className="w-full bg-surface-container-low border border-surface-container-high rounded-xl p-3 text-xs font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary"

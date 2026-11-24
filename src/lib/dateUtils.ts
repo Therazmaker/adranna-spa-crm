@@ -23,6 +23,16 @@ export function getStartOfMonthLocal(date: Date = new Date()): string {
   return getLocalDateStr(d);
 }
 
+/** Quincena actual: del 1 al 15, o del 16 al último día del mes. */
+export function getQuincenaRangeLocal(date: Date = new Date()): { start: string; end: string } {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  if (date.getDate() <= 15) {
+    return { start: getLocalDateStr(new Date(y, m, 1)), end: getLocalDateStr(new Date(y, m, 15)) };
+  }
+  return { start: getLocalDateStr(new Date(y, m, 16)), end: getLocalDateStr(new Date(y, m + 1, 0)) };
+}
+
 export function addDaysLocal(days: number, fromDate: Date = new Date()): string {
   const d = new Date(fromDate);
   d.setDate(d.getDate() + days);
