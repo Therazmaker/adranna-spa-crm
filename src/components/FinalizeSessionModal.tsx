@@ -40,6 +40,7 @@ export default function FinalizeSessionModal({
     transferencia: '',
   });
   const [servicePriceInput, setServicePriceInput] = useState<string>('');
+  const [tipAmountInput, setTipAmountInput] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
   // Quick product creation inline
@@ -56,6 +57,7 @@ export default function FinalizeSessionModal({
       setSessionNotes(appointment.notes || '');
       setSessionProcedure(appointment.procedure || '');
       setPaymentMethod(appointment.paymentMethod || 'efectivo');
+      setTipAmountInput(appointment.tipAmount && appointment.tipAmount > 0 ? String(appointment.tipAmount) : '');
       const prevSplits = (appointment.payments || []).filter((p) => Number(p.amount) > 0);
       if (prevSplits.length > 1) {
         setIsSplitPayment(true);
@@ -111,11 +113,17 @@ export default function FinalizeSessionModal({
   const depositMethod = appointment.depositPaymentMethod || 'yape_plin';
   const depositOption = PAYMENT_OPTIONS.find((o) => o.value === depositMethod) || PAYMENT_OPTIONS[1];
 
+  // Propina voluntaria para el especialista
+  const tipAmount = Math.max(0, Number(tipAmountInput) || 0);
+
   // Total de la sesión según si lleva productos o no
   const sessionTotal = wantsProducts ? finalTotal : baseServicePrice;
 
+  // Gran total de la visita (servicio + productos + propina voluntaria)
+  const grandTotal = sessionTotal + tipAmount;
+
   // Saldo restante a cobrar hoy en cabina tras deducir el adelanto previo
-  const amountDue = Math.max(0, Math.round((sessionTotal - depositPaid) * 100) / 100);
+  const amountDue = Math.max(0, Math.round((grandTotal - depositPaid) * 100) / 100);
 
   const splitAssigned = PAYMENT_OPTIONS.reduce(
     (s, opt) => s + (Number(splitAmounts[opt.value]) || 0),
@@ -196,7 +204,8 @@ export default function FinalizeSessionModal({
     const itemsToSave = withProducts ? soldProducts : [];
     const prodSum = withProducts ? productsTotal : 0;
     const totalPrice = baseServicePrice + prodSum;
-    const payments = buildPayments(totalPrice);
+    const grandTotal = totalPrice + tipAmount;
+    const payments = buildPayments(grandTotal);
 
     // 1. Descontar stock de los productos vendidos
     if (itemsToSave.length > 0) {
@@ -209,13 +218,15 @@ export default function FinalizeSessionModal({
       }
     }
 
-    // 2. Actualizar cita como completada con el desglose de productos, medio de pago, observaciones y procedimiento
+    // 2. Actualizar cita como completada con el desglose de productos, propinas, medio de pago, observaciones y procedimiento
     const updates: Partial<Appointment> = {
       status: 'completado',
       servicePrice: baseServicePrice,
       soldProducts: itemsToSave,
       productsTotal: prodSum,
       price: totalPrice,
+      tipAmount: tipAmount > 0 ? tipAmount : undefined,
+      tipPaymentMethod: tipAmount > 0 ? getPrimaryMethod(payments, paymentMethod) : undefined,
       paymentMethod: getPrimaryMethod(payments, paymentMethod),
       payments,
       notes: sessionNotes.trim() || undefined,
@@ -401,6 +412,72 @@ export default function FinalizeSessionModal({
             </div>
           </div>
 
+          {/* Propina voluntaria para el especialista */}
+          <div className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/90 space-y-2 text-xs">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center text-sm shadow-2xs font-bold">
+                  🎁
+                </span>
+                <div>
+                  <span className="font-extrabold text-amber-950 block">
+                    Propina para {appointment.professionalName || 'la Especialista'} (Opcional)
+                  </span>
+                  <span className="text-[10px] text-amber-800 block">
+                    Monto voluntario que el cliente desea dejar a su profesional
+                  </span>
+                </div>
+              </div>
+              {tipAmount > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-200 text-amber-950 border border-amber-300">
+                  + S/ {tipAmount.toFixed(2)}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              {[0, 5, 10, 15, 20].map((amt) => {
+                const isSelected =
+                  amt === 0
+                    ? tipAmount === 0 && tipAmountInput.trim() === ''
+                    : tipAmount === amt && tipAmountInput.trim() === String(amt);
+                return (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => {
+                      const nextVal = amt === 0 ? '' : String(amt);
+                      setTipAmountInput(nextVal);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      isSelected
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'bg-surface-container-lowest text-amber-950 border border-amber-300/80 hover:bg-amber-100/70'
+                    }`}
+                  >
+                    {amt === 0 ? 'Sin propina' : `S/ ${amt}`}
+                  </button>
+                );
+              })}
+
+              <div className="relative flex items-center ml-auto">
+                <span className="absolute left-2.5 text-xs font-bold text-amber-900">S/</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Otro monto"
+                  value={tipAmountInput}
+                  onFocus={(e) => e.target.select()}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/[^0-9.]/g, '').replace(/^0+(?=\d)/, '');
+                    setTipAmountInput(cleaned);
+                  }}
+                  className="w-28 pl-7 pr-2 py-1.5 rounded-xl bg-surface-container-lowest border border-amber-300 text-xs font-bold text-amber-950 text-right focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Si hay un adelanto previo registrado */}
           {depositPaid > 0 && (
             <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
@@ -426,7 +503,7 @@ export default function FinalizeSessionModal({
               </div>
               <div className="text-right sm:text-right pl-10 sm:pl-0 flex-shrink-0 border-t sm:border-t-0 pt-1.5 sm:pt-0 border-emerald-200/60">
                 <span className="text-[10px] font-semibold text-emerald-800 block">
-                  Total {wantsProducts ? 'con productos' : 'servicio'}: S/ {sessionTotal.toFixed(2)} - S/ {depositPaid.toFixed(2)}
+                  Total {wantsProducts ? 'con productos' : 'servicio'}{tipAmount > 0 ? ` + propina` : ''}: S/ {grandTotal.toFixed(2)} - S/ {depositPaid.toFixed(2)}
                 </span>
                 <span className="text-sm font-black text-emerald-950">
                   Saldo Restante: S/ {amountDue.toFixed(2)}
@@ -605,6 +682,8 @@ export default function FinalizeSessionModal({
                     ? amountDue > 0
                       ? `No, finalizar solo sesión (Cobrar Saldo S/ ${amountDue.toFixed(2)})`
                       : 'No, finalizar solo sesión (Cubierto por adelanto)'
+                    : tipAmount > 0
+                    ? `No, finalizar solo sesión (Cobrar S/ ${amountDue.toFixed(2)})`
                     : `No, finalizar solo sesión (S/ ${baseServicePrice.toFixed(2)})`}
                 </span>
               </button>
@@ -788,9 +867,15 @@ export default function FinalizeSessionModal({
                   <span>Productos ({soldProducts.reduce((s, i) => s + i.quantity, 0)} unid.):</span>
                   <span>+ S/ {productsTotal.toFixed(2)}</span>
                 </div>
+                {tipAmount > 0 && (
+                  <div className="flex justify-between text-amber-900 font-bold">
+                    <span>🎁 Propina ({appointment.professionalName || 'Especialista'}):</span>
+                    <span>+ S/ {tipAmount.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm font-bold text-primary pt-1 border-t border-surface-container-high/60">
-                  <span>Total Sesión + Productos:</span>
-                  <span className="font-serif text-base">S/ {finalTotal.toFixed(2)}</span>
+                  <span>Total Visita:</span>
+                  <span className="font-serif text-base">S/ {grandTotal.toFixed(2)}</span>
                 </div>
                 {depositPaid > 0 && (
                   <>
@@ -821,7 +906,7 @@ export default function FinalizeSessionModal({
                     ? amountDue > 0
                       ? `Confirmar y Cobrar Saldo (S/ ${amountDue.toFixed(2)})`
                       : 'Confirmar y Finalizar (Cubierto por adelanto)'
-                    : `Confirmar y Finalizar Sesión (S/ ${finalTotal.toFixed(2)})`}
+                    : `Confirmar y Finalizar Sesión (S/ ${grandTotal.toFixed(2)})`}
                 </span>
               </button>
             </div>

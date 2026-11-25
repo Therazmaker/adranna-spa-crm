@@ -24,7 +24,7 @@ export function getPaymentOption(method: PaymentMethod) {
  */
 export function getAptPayments(
   apt: Pick<Appointment, 'payments' | 'paymentMethod' | 'price'> &
-    Partial<Pick<Appointment, 'depositAmount' | 'depositPaymentMethod' | 'status'>>
+    Partial<Pick<Appointment, 'depositAmount' | 'depositPaymentMethod' | 'status' | 'tipAmount'>>
 ): PaymentSplit[] {
   if (apt.payments && apt.payments.length > 0) {
     return apt.payments.filter((p) => Number(p.amount) > 0 || apt.payments!.length === 1);
@@ -33,13 +33,14 @@ export function getAptPayments(
   if (apt.status !== 'completado' && apt.depositAmount && Number(apt.depositAmount) > 0) {
     return [{ method: apt.depositPaymentMethod || 'yape_plin', amount: Number(apt.depositAmount) }];
   }
-  return [{ method: apt.paymentMethod || 'efectivo', amount: Number(apt.price) || 0 }];
+  const total = (Number(apt.price) || 0) + (Number(apt.tipAmount) || 0);
+  return [{ method: apt.paymentMethod || 'efectivo', amount: total }];
 }
 
-/** Monto pagado con un método concreto en una cita (considera pagos mixtos y adelantos). */
+/** Monto pagado con un método concreto en una cita (considera pagos mixtos, adelantos y propinas). */
 export function getAptAmountForMethod(
   apt: Pick<Appointment, 'payments' | 'paymentMethod' | 'price'> &
-    Partial<Pick<Appointment, 'depositAmount' | 'depositPaymentMethod' | 'status'>>,
+    Partial<Pick<Appointment, 'depositAmount' | 'depositPaymentMethod' | 'status' | 'tipAmount'>>,
   method: PaymentMethod
 ): number {
   return getAptPayments(apt)

@@ -75,6 +75,9 @@ export interface Appointment {
   servicePrice?: number; // Precio base del servicio
   soldProducts?: SoldProductItem[];
   productsTotal?: number;
+  // Propina voluntaria para el especialista
+  tipAmount?: number; // Monto voluntario de propina dejado por el cliente
+  tipPaymentMethod?: PaymentMethod; // Medio de pago con el que se entregó la propina
   // Adelanto / Depósito de reserva
   depositAmount?: number; // Monto cobrado como adelanto (ej. S/ 30.00)
   depositPaymentMethod?: PaymentMethod; // Medio del adelanto ('yape_plin' | 'efectivo' | 'tarjeta' | 'transferencia')

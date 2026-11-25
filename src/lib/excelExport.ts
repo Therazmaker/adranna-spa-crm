@@ -141,6 +141,7 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
       clientNames: string[];
       serviceIncome: number;
       productsIncome: number;
+      tipsTotal: number;
       total: number;
     }
   >();
@@ -155,11 +156,13 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
       clientNames: [],
       serviceIncome: 0,
       productsIncome: 0,
+      tipsTotal: 0,
       total: 0,
     };
     const prodAmt = Number(a.productsTotal) || 0;
     const totalAmt = Number(a.price) || 0;
     const srvAmt = a.servicePrice !== undefined ? Number(a.servicePrice) : totalAmt - prodAmt;
+    const tipAmt = Number(a.tipAmount) || 0;
 
     curr.sessions += 1;
     if (a.clientName && !curr.clientNames.includes(a.clientName)) {
@@ -168,11 +171,13 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     curr.uniqueClients = curr.clientNames.length;
     curr.serviceIncome += srvAmt;
     curr.productsIncome += prodAmt;
+    curr.tipsTotal += tipAmt;
     curr.total += totalAmt;
     profMap.set(key, curr);
   }
 
   const profRows = Array.from(profMap.values()).sort((a, b) => b.total - a.total);
+  const totalTipsAll = sortedApts.reduce((s, a) => s + (Number(a.tipAmount) || 0), 0);
   const emittedAt = new Date().toLocaleString('es-PE', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -511,6 +516,7 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     ${cellString('Servicio (S/)', 'sTableHeader')}
     ${cellString('Productos Vendidos', 'sTableHeader')}
     ${cellString('Productos (S/)', 'sTableHeader')}
+    ${cellString('Propina (S/)', 'sTableHeader')}
     ${cellString('Total Cobrado (S/)', 'sTableHeader')}
     ${cellString('Observaciones (Hallazgos)', 'sTableHeader')}
     ${cellString('Procedimiento Realizado', 'sTableHeader')}
@@ -552,7 +558,8 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     ${cellNumber(srvAmt, 'sCurrency')}
     ${cellString(prodSummary, 'sCell')}
     ${cellNumber(prodAmt, 'sCurrency')}
-    ${cellNumber(totalAmt, 'sCurrency')}
+    ${cellNumber(Number(a.tipAmount) || 0, 'sCurrency')}
+    ${cellNumber(totalAmt + (Number(a.tipAmount) || 0), 'sCurrency')}
     ${cellString((a.notes || '').replace(/\n+/g, ' | '), 'sCell')}
     ${cellString((a.procedure || a.serviceName || '').replace(/\n+/g, ' | '), 'sCell')}
    </Row>`;
@@ -564,7 +571,8 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     ${cellNumber(podoServiceIncome + spaServiceIncome, 'sTotalCurrency')}
     ${cellString('', 'sTotalLabel')}
     ${cellNumber(totalProductsSold, 'sTotalCurrency')}
-    ${cellNumber(totalIncome, 'sTotalCurrency')}
+    ${cellNumber(totalTipsAll, 'sTotalCurrency')}
+    ${cellNumber(totalIncome + totalTipsAll, 'sTotalCurrency')}
     ${cellString('', 'sTotalLabel', 1)}
    </Row>
   </Table>
@@ -642,6 +650,7 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     ${cellString('Clientes Únicos', 'sTableHeader')}
     ${cellString('Servicios (S/)', 'sTableHeader')}
     ${cellString('Productos (S/)', 'sTableHeader')}
+    ${cellString('Propinas (S/)', 'sTableHeader')}
     ${cellString('Total Generado (S/)', 'sTableHeader')}
     ${cellString('Clientes Atendidos', 'sTableHeader')}
    </Row>
@@ -657,7 +666,8 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     ${cellNumber(p.uniqueClients, 'sInt')}
     ${cellNumber(p.serviceIncome, 'sCurrency')}
     ${cellNumber(p.productsIncome, 'sCurrency')}
-    ${cellNumber(p.total, 'sCurrency')}
+    ${cellNumber(p.tipsTotal, 'sCurrency')}
+    ${cellNumber(p.total + p.tipsTotal, 'sCurrency')}
     ${cellString(p.clientNames.join(', '), 'sCell')}
    </Row>`
            )
@@ -669,7 +679,8 @@ export function exportCashReconciliationExcel(input: CashReconciliationReportInp
     ${cellNumber(new Set(sortedApts.map((a) => a.clientName.trim().toLowerCase())).size, 'sTotalInt')}
     ${cellNumber(podoServiceIncome + spaServiceIncome, 'sTotalCurrency')}
     ${cellNumber(totalProductsSold, 'sTotalCurrency')}
-    ${cellNumber(totalIncome, 'sTotalCurrency')}
+    ${cellNumber(totalTipsAll, 'sTotalCurrency')}
+    ${cellNumber(totalIncome + totalTipsAll, 'sTotalCurrency')}
     ${cellString('-', 'sCell')}
    </Row>
   </Table>

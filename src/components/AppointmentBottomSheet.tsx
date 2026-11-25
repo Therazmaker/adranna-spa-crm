@@ -323,6 +323,23 @@ export default function AppointmentBottomSheet({
             </div>
           )}
 
+          {/* Tarjeta de Propina para la especialista */}
+          {appointment.tipAmount && Number(appointment.tipAmount) > 0 && (
+            <div className="pt-2 border-t border-surface-container-high/60">
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                  <span className="text-sm">🎁</span>
+                  <span>
+                    Propina voluntaria para <strong>{appointment.professionalName || 'la especialista'}</strong>:
+                  </span>
+                </div>
+                <span className="font-extrabold text-amber-950 bg-amber-200/80 px-2 py-0.5 rounded-md border border-amber-300">
+                  + S/ {Number(appointment.tipAmount).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Desglose de método(s) de pago */}
           {(appointment.status === 'completado' || appointment.payments) && (
             <div className="pt-2 border-t border-surface-container-high/60 flex items-center justify-between gap-2 flex-wrap">

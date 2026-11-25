@@ -201,6 +201,8 @@ export default function ContabilidadPage() {
   const filteredExps = expenses.filter((e) => filterByDate(e.date));
 
   const totalIncome = filteredApts.reduce((sum, a) => sum + (Number(a.price) || 0), 0);
+  const totalTips = filteredApts.reduce((sum, a) => sum + (Number(a.tipAmount) || 0), 0);
+  const totalTipsCount = filteredApts.filter((a) => (Number(a.tipAmount) || 0) > 0).length;
   const totalExpenses = filteredExps.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
   const netProfit = totalIncome - totalExpenses;
   const avgTicket = filteredApts.length > 0 ? Math.round(totalIncome / filteredApts.length) : 0;
@@ -237,6 +239,7 @@ export default function ContabilidadPage() {
     services: string[];
     dates: string[];
     totalPaid: number;
+    tipPaid: number;
   }
 
   interface SpecialistSummary {
@@ -249,6 +252,7 @@ export default function ContabilidadPage() {
     totalIncome: number;
     serviceIncome: number;
     productsIncome: number;
+    tipsTotal: number;
   }
 
   const specialistsMap = new Map<string, SpecialistSummary>();
@@ -266,16 +270,19 @@ export default function ContabilidadPage() {
       totalIncome: 0,
       serviceIncome: 0,
       productsIncome: 0,
+      tipsTotal: 0,
     };
 
     curr.sessionsCount += 1;
     const totalAmt = Number(apt.price) || 0;
     const prodAmt = Number(apt.productsTotal) || 0;
     const srvAmt = apt.servicePrice !== undefined ? Number(apt.servicePrice) : totalAmt - prodAmt;
+    const tipAmt = Number(apt.tipAmount) || 0;
 
     curr.totalIncome += totalAmt;
     curr.serviceIncome += srvAmt;
     curr.productsIncome += prodAmt;
+    curr.tipsTotal += tipAmt;
 
     let clientEntry = curr.clients.find(
       (c) => c.clientName.trim().toLowerCase() === apt.clientName.trim().toLowerCase()
@@ -288,6 +295,7 @@ export default function ContabilidadPage() {
         services: [],
         dates: [],
         totalPaid: 0,
+        tipPaid: 0,
       };
       curr.clients.push(clientEntry);
     }
@@ -300,6 +308,7 @@ export default function ContabilidadPage() {
       clientEntry.dates.push(dateLabel);
     }
     clientEntry.totalPaid += totalAmt;
+    clientEntry.tipPaid += tipAmt;
 
     curr.uniqueClientsCount = curr.clients.length;
     specialistsMap.set(specName, curr);
@@ -527,7 +536,7 @@ export default function ContabilidadPage() {
       </div>
 
       {/* Bento Financiero: Ingresos vs Egresos vs Margen */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* Total Ingresos */}
         <div className="p-4 rounded-2xl bg-surface-container-lowest shadow-xs border border-surface-container-high/60 flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -603,6 +612,25 @@ export default function ContabilidadPage() {
           </div>
           <span className="text-[11px] text-on-surface-variant font-medium">
             Por sesión atendida
+          </span>
+        </div>
+
+        {/* Propinas del Equipo */}
+        <div className="p-4 rounded-2xl bg-surface-container-lowest shadow-xs border border-amber-300/80 flex flex-col justify-between col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-amber-950">Propinas Equipo</span>
+            <div className="w-8 h-8 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-sm">
+              🎁
+            </div>
+          </div>
+          <div className="my-2">
+            <span className="font-serif text-2xl sm:text-3xl font-bold text-amber-900">
+              S/ {totalTips.toFixed(2)}
+            </span>
+            <span className="text-xs text-outline block font-medium">PEN voluntarias</span>
+          </div>
+          <span className="text-[11px] text-amber-800 font-bold">
+            {totalTipsCount} {totalTipsCount === 1 ? 'propina registrada' : 'propinas registradas'}
           </span>
         </div>
       </section>
@@ -1115,6 +1143,17 @@ export default function ContabilidadPage() {
                         </span>
                       </div>
 
+                      {spec.tipsTotal > 0 && (
+                        <div
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-100 border border-amber-300 text-amber-950 text-xs font-bold shadow-2xs"
+                          title="Total de propinas voluntarias dejadas por clientes para esta especialista"
+                        >
+                          <span>🎁</span>
+                          <span className="font-medium text-[11px]">Propinas:</span>
+                          <span className="font-extrabold">S/ {spec.tipsTotal.toFixed(2)}</span>
+                        </div>
+                      )}
+
                       <button
                         type="button"
                         onClick={() => setSelectedSpecialist(isSelected ? 'todos' : spec.name)}
@@ -1182,9 +1221,16 @@ export default function ContabilidadPage() {
                               <span className="text-outline">
                                 {c.dates[c.dates.length - 1]}
                               </span>
-                              <span className="font-bold text-primary">
-                                S/ {c.totalPaid.toFixed(2)}
-                              </span>
+                              <div className="flex items-center gap-1.5 font-bold">
+                                {c.tipPaid > 0 && (
+                                  <span className="text-amber-900 bg-amber-100 px-1 rounded border border-amber-300 font-extrabold" title="Propina voluntaria dejada por este paciente">
+                                    🎁 S/{c.tipPaid.toFixed(2)}
+                                  </span>
+                                )}
+                                <span className="text-primary">
+                                  S/ {c.totalPaid.toFixed(2)}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -1399,6 +1445,11 @@ export default function ContabilidadPage() {
                         + {apt.soldProducts.reduce((s, p) => s + p.quantity, 0)} prod. (S/ {apt.productsTotal})
                       </span>
                     )}
+                    {apt.tipAmount && Number(apt.tipAmount) > 0 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                        🎁 Propina: S/ {Number(apt.tipAmount).toFixed(2)}
+                      </span>
+                    )}
                   </div>
                   <p className="text-[11px] text-outline mt-0.5">
                     {apt.date} · {formatTime12(apt.time)} • {apt.professionalName} ({apt.cabinName})
@@ -1442,9 +1493,20 @@ export default function ContabilidadPage() {
                   </select>
                   )}
 
-                  <span className="font-serif font-bold text-base text-primary min-w-[72px] text-right">
-                    + S/ {Number(apt.price || 0).toFixed(2)}
-                  </span>
+                  {apt.tipAmount && Number(apt.tipAmount) > 0 ? (
+                    <div className="text-right min-w-[85px]">
+                      <span className="font-serif font-bold text-base text-primary block leading-none">
+                        + S/ {(Number(apt.price || 0) + Number(apt.tipAmount || 0)).toFixed(2)}
+                      </span>
+                      <span className="text-[9.5px] text-amber-900 font-semibold block mt-0.5">
+                        (S/{Number(apt.price || 0)} + 🎁 S/{Number(apt.tipAmount)})
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-serif font-bold text-base text-primary min-w-[72px] text-right">
+                      + S/ {Number(apt.price || 0).toFixed(2)}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
